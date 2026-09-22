@@ -36,7 +36,7 @@ const exportStudentDetailPDF = async (studentId) => {
     loadingOverlay.innerHTML = `
         <div class="bg-white rounded-lg p-6 max-w-sm">
             <div class="flex items-center gap-3">
-                <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+                <div class="avo-spinner" style="--avo-spinner-size:32px" aria-hidden="true"></div>
                 <div>
                     <p class="font-semibold">${escapeHtml(t("pdf.generating"))}</p>
                     <p class="text-sm text-gray-600">${escapeHtml(t("pdf.pleaseWait"))}</p>

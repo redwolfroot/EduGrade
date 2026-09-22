@@ -1,10 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Quicksand:wght@300..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Quicksand:wght@300..700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 /* Body */
 body { font-family: 'Quicksand', sans-serif; }
 
-/* Monospace */
-code, kbd, samp, pre, .font-mono { font-family: 'IBM Plex Mono', ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, monospace; }
+/* Monospace — JetBrains Mono is the brand's UI/number face (BRANDING.md §4) */
+:root { --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+code, kbd, samp, pre, .font-mono { font-family: var(--font-mono); }
 
 /* Headings */
 h1, h2, h3, h4 {
@@ -94,3 +95,234 @@ h1, h2, h3, h4 {
     font-weight: 800;
     font-size: 1.1rem;
 }
+
+
+/* ==========================================================================
+   avocloud brand borrowings — BRANDING.md v4.1
+   EduGrade keeps its own language on purpose: warm light-first ground,
+   Quicksand body, 14px card radii, user-pickable accent. Everything below is
+   what it takes FROM the avocloud system. Deliberate exceptions are recorded
+   in brand/CONFORMANCE.md. Coral marks follow --primary, so the accent picker
+   still works; coral is simply the default.
+   ========================================================================== */
+
+/* ---- Focus ring (§10) ---------------------------------------------------
+   Basecoat already draws an accent-coloured ring on buttons, inputs, selects,
+   tabs and switches (box-shadow from --ring, which follows the accent picker),
+   so those are left alone. This covers what it does NOT: plain links, disclosure
+   summaries, role=button and focusable cards. 2px solid accent, :focus-visible
+   only, offset clear of the element's own border. */
+a:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+.class-exam-overview-card:focus-visible,
+[tabindex]:not([tabindex="-1"]):not(input):not(select):not(textarea):not(button):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ---- Icons: 1.5 stroke (§5) ---------------------------------------------
+   CSS beats the stroke-width="2" attribute on the inline SVGs. The guide also
+   asks for vector-effect: non-scaling-stroke; EduGrade must NOT: its check/x/
+   file-text icons draw themselves with stroke-dasharray + dashoffset in icon
+   units, and non-scaling-stroke re-measures the dashes in screen pixels, so a
+   40px toast check drew as a single segment. Recorded as an exception. */
+.lucide,
+svg[viewBox="0 0 24 24"][stroke="currentColor"] { stroke-width: 1.5; }
+
+/* ---- Numbers are mono and tabular (§4) ----------------------------------
+   Columns line up and a counter doesn't reflow while it changes. */
+table, .stat-card, .qsb-stat-card, .grade-badge, .trend-badge { font-variant-numeric: tabular-nums; }
+.stat-card p.text-2xl,
+.qsb-stat-card:not(:last-child) .qsb-stat-value,
+.grade-badge,
+.trend-badge {
+    font-family: var(--font-mono);
+}
+
+/* ---- Chips: flat, 6px, never a pill (§5) --------------------------------
+   Small labels lose the pill. Circles (avatars, icon discs, dots) have no
+   horizontal padding utility and are left alone. */
+[class*="px-"].rounded-full,
+.grade-badge,
+.trend-badge {
+    border-radius: 6px;
+}
+/* Neutral label chips carry the coral [ ] brackets. Status/grade chips don't:
+   coral is brand, never status. */
+[data-chip-name] {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    border-radius: 6px;
+}
+[data-chip-name]::before { content: "["; color: var(--primary); margin-right: 0.4em; }
+[data-chip-name]::after  { content: "]"; color: var(--primary); margin-left: 0.4em; }
+
+/* ---- Corner marks (§5) --------------------------------------------------
+   Two accent arcs, top-left + bottom-right, visible at rest, full on hover and
+   :focus-within. One pair per SURFACE, never per row. Sized to trace EduGrade's
+   14px card corner (inset 5px -> 9px arc). */
+.stat-card,
+.auth-card > .card,
+.sidebar[data-side="left"] nav { --mk: var(--primary); }
+.stat-card,
+.auth-card > .card { position: relative; }
+
+.stat-card::before, .stat-card::after,
+.auth-card > .card::before, .auth-card > .card::after,
+.sidebar[data-side="left"] nav::before, .sidebar[data-side="left"] nav::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 0 solid var(--mk);
+    opacity: 0.32;
+    transform: scale(0.55);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.stat-card::before, .auth-card > .card::before, .sidebar[data-side="left"] nav::before {
+    top: 5px; left: 5px;
+    border-top-width: 1.5px; border-left-width: 1.5px;
+    border-top-left-radius: 9px;
+    transform-origin: top left;
+}
+.stat-card::after, .auth-card > .card::after, .sidebar[data-side="left"] nav::after {
+    bottom: 5px; right: 5px;
+    border-bottom-width: 1.5px; border-right-width: 1.5px;
+    border-bottom-right-radius: 9px;
+    transform-origin: bottom right;
+}
+.stat-card:hover::before, .stat-card:hover::after, .stat-card:focus-within::before, .stat-card:focus-within::after,
+.auth-card > .card:hover::before, .auth-card > .card:hover::after, .auth-card > .card:focus-within::before, .auth-card > .card:focus-within::after,
+.sidebar[data-side="left"] nav:hover::before, .sidebar[data-side="left"] nav:hover::after,
+.sidebar[data-side="left"] nav:focus-within::before, .sidebar[data-side="left"] nav:focus-within::after {
+    opacity: 1;
+    transform: scale(1);
+}
+/* The drawer on mobile is not a floating surface. */
+@media (max-width: 768px) {
+    .sidebar[data-side="left"] nav::before, .sidebar[data-side="left"] nav::after { display: none; }
+}
+
+/* ---- Sidebar: a floating rail (§9 Navigation) ---------------------------
+   One surface, inset from the viewport edge, filling the viewport height.
+   Basecoat pins the nav flush left with inset-block:0 and pushes <main> over
+   with margin-left. We inset the nav by --rail-gap and compensate <main>:
+   nav width + gap on both sides, minus the 1.5rem body padding already there.
+   Mobile keeps the full-height off-canvas drawer. */
+:root { --rail-gap: 16px; }
+@media (min-width: 769px) {
+    .sidebar[data-side="left"] nav {
+        inset-block: var(--rail-gap);
+        left: var(--rail-gap);
+        /* style.css gives the nav height:100%, which on top of the top gap
+           pushes the bottom edge off screen. With both insets set, auto
+           stretches it to exactly viewport minus two gaps. */
+        height: auto;
+        background-color: var(--card);
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius, 0.625rem) + 4px);
+    }
+    /* Hidden state must clear the gap too, or a sliver of the rail stays. */
+    .sidebar[data-side="left"][aria-hidden="true"] nav {
+        --tw-translate-x: calc(-100% - var(--rail-gap) - 2px);
+    }
+    .sidebar[data-side="left"]:not([aria-hidden="true"]) + * {
+        margin-left: calc(var(--sidebar-width) + var(--rail-gap) * 2 - 1.5rem);
+    }
+}
+
+/* Active row: a line being struck, on top of the tonal fill. Colour is never
+   the only signal. */
+.sidebar nav .btn-block { position: relative; }
+.sidebar nav .btn-block.btn-primary::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--primary);
+}
+
+/* ---- Solid accent needs dark text on dark (§3) --------------------------
+   White on the dark-mode accent (60% lightness) is ~3.3:1 for coral; near-black
+   is ~6:1 and clears AA for every preset. Light mode's darker accent keeps white. */
+html.dark { --primary-foreground: #0a0a0a; }
+
+/* ---- Loader: coral ticks marching round a ring (§9) ----------------------
+   12 ticks at a 1/2 duty on a 3px ring; the tick COUNT is the constant, so it
+   is the same object at 16 and 42px. Replaces the generic arc spinner. */
+.avo-spinner {
+    --avo-spinner-size: 20px;
+    width: var(--avo-spinner-size);
+    height: var(--avo-spinner-size);
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: repeating-conic-gradient(var(--primary) 0 15deg, transparent 15deg 30deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    animation: avo-spinner-rotate 1.2s linear infinite;
+}
+@keyframes avo-spinner-rotate { to { transform: rotate(360deg); } }
+/* A loader has no end state to jump to; it holds still and stays visible. */
+@media (prefers-reduced-motion: reduce) {
+    .avo-spinner { animation: none; }
+}
+
+
+
+/* ---- Field icons (BRANDING.md §5) ----------------------------------------
+   A leading Lucide glyph says what KIND of field it is: search, mail, key,
+   category, subject... Set with data-icon="<name>" on the <input>/<select>:
+   no wrapper element, so it cannot disturb a layout, it works on fields JS
+   renders later, and a language switch cannot wipe it.
+   Left out on purpose: date inputs (the native picker glyph is already a
+   leading/trailing decoration - the guide bars two on one control), the
+   narrow paired percentage-range fields in Settings (already labelled AND
+   suffixed with "%" - an icon would only repeat that), the compact inline
+   selects in the attendance row and the Moodle class mapping (no room), and
+   textareas (padding-left would indent every line of what someone types,
+   not just the first).
+   The glyph is a background image, so it cannot inherit currentColor: one
+   mid-tone grey (~3.7:1 on the light card, ~4:1 on the dark one) works on
+   both themes. To add an icon, copy the inner elements of its lucide.dev SVG
+   into a new rule below. */
+input[data-icon] {
+    background-repeat: no-repeat;
+    background-position: 0.75rem 50%;
+    background-size: 1rem 1rem;
+    padding-left: 2.25rem;
+}
+/* Basecoat's .select already paints its own chevron as a background-image
+   (--chevron-down-icon-50, right-aligned); a leading field icon has to stack
+   alongside it as a second background layer instead of replacing it, or the
+   dropdown loses its arrow. */
+select[data-icon] {
+    background-repeat: no-repeat, no-repeat;
+    background-position: 0.75rem 50%, right 0.75rem center;
+    background-size: 1rem 1rem, 1rem;
+    padding-left: 2.25rem;
+}
+input[data-icon="book-open"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v16'/%3E%3Cpath d='M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z'/%3E%3C/svg%3E"); }
+input[data-icon="building-2"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 12h4'/%3E%3Cpath d='M10 8h4'/%3E%3Cpath d='M14 21v-3a2 2 0 0 0-4 0v3'/%3E%3Cpath d='M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2'/%3E%3Cpath d='M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16'/%3E%3C/svg%3E"); }
+input[data-icon="globe"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20'/%3E%3Cpath d='M2 12h20'/%3E%3C/svg%3E"); }
+input[data-icon="hash"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='4' x2='20' y1='9' y2='9'/%3E%3Cline x1='4' x2='20' y1='15' y2='15'/%3E%3Cline x1='10' x2='8' y1='3' y2='21'/%3E%3Cline x1='16' x2='14' y1='3' y2='21'/%3E%3C/svg%3E"); }
+input[data-icon="key-round"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z'/%3E%3Ccircle cx='16.5' cy='7.5' r='.5' fill='currentColor'/%3E%3C/svg%3E"); }
+input[data-icon="lock"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='11' x='3' y='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E"); }
+input[data-icon="mail"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7'/%3E%3Crect x='2' y='4' width='20' height='16' rx='2'/%3E%3C/svg%3E"); }
+input[data-icon="percent"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='19' x2='5' y1='5' y2='19'/%3E%3Ccircle cx='6.5' cy='6.5' r='2.5'/%3E%3Ccircle cx='17.5' cy='17.5' r='2.5'/%3E%3C/svg%3E"); }
+input[data-icon="qr-code"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='5' height='5' x='3' y='3' rx='1'/%3E%3Crect width='5' height='5' x='16' y='3' rx='1'/%3E%3Crect width='5' height='5' x='3' y='16' rx='1'/%3E%3Cpath d='M21 16h-3a2 2 0 0 0-2 2v3'/%3E%3Cpath d='M21 21v.01'/%3E%3Cpath d='M12 7v3a2 2 0 0 1-2 2H7'/%3E%3Cpath d='M3 12h.01'/%3E%3Cpath d='M12 3h.01'/%3E%3Cpath d='M12 16v.01'/%3E%3Cpath d='M16 12h1'/%3E%3Cpath d='M21 12v.01'/%3E%3Cpath d='M12 21v-1'/%3E%3C/svg%3E"); }
+input[data-icon="school"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 21v-3a2 2 0 0 0-4 0v3'/%3E%3Cpath d='M18 4.933V21'/%3E%3Cpath d='m4 6 7.106-3.79a2 2 0 0 1 1.788 0L20 6'/%3E%3Cpath d='m6 11-3.52 2.147a1 1 0 0 0-.48.854V19a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a1 1 0 0 0-.48-.853L18 11'/%3E%3Cpath d='M6 4.933V21'/%3E%3Ccircle cx='12' cy='9' r='2'/%3E%3C/svg%3E"); }
+input[data-icon="search"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21 21-4.34-4.34'/%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3C/svg%3E"); }
+input[data-icon="user"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E"); }
+input[data-icon="users"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Cpath d='M16 3.128a4 4 0 0 1 0 7.744'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.87'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3C/svg%3E"); }
+select[data-icon="book-open"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v16'/%3E%3Cpath d='M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z'/%3E%3C/svg%3E"), var(--chevron-down-icon-50); }
+select[data-icon="clock"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E"), var(--chevron-down-icon-50); }
+select[data-icon="list-checks"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 5h8'/%3E%3Cpath d='M13 12h8'/%3E%3Cpath d='M13 19h8'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cpath d='m3 7 2 2 4-4'/%3E%3C/svg%3E"), var(--chevron-down-icon-50); }
+select[data-icon="tag"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8378' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z'/%3E%3Ccircle cx='7.5' cy='7.5' r='.5' fill='currentColor'/%3E%3C/svg%3E"), var(--chevron-down-icon-50); }
+
+/* ---- Icons inside small badges ------------------------------------------ */
+.trend-badge .lucide { width: 0.9em; height: 0.9em; stroke-width: 2; }

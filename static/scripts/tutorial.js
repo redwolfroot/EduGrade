@@ -254,7 +254,7 @@ const showTutorialPrompt = () => {
                 </label>
                 <div class="flex gap-2">
                     <button type="button" class="btn-outline" id="tutorial-skip">${escapeHtml(t("tutorial.skip"))}</button>
-                    <button type="button" class="btn-primary" id="tutorial-start">${escapeHtml(t("tutorial.startTour"))}</button>
+                    <button type="button" class="btn-primary" id="tutorial-start">${lucideIcon('play')} ${escapeHtml(t("tutorial.startTour"))}</button>
                 </div>
             </div>
         </div>
@@ -416,7 +416,7 @@ const renderTutorialStep = (step, stepIndex) => {
                     ${escapeHtml(t("tutorial.skipTour"))}
                 </button>
                 <div class="flex gap-2">
-                    ${stepIndex > 0 ? `<button type="button" class="btn-outline" id="tutorial-back-btn">${escapeHtml(t("tutorial.back"))}</button>` : ''}
+                    ${stepIndex > 0 ? `<button type="button" class="btn-outline" id="tutorial-back-btn">${lucideIcon('arrow-left')} ${escapeHtml(t("tutorial.back"))}</button>` : ''}
                     ${showNextButton ? `<button type="button" class="btn-primary" id="tutorial-next-btn">${isLastStep ? escapeHtml(t("tutorial.finish")) : escapeHtml(t("tutorial.next"))}</button>` : ''}
                 </div>
             </div>
