@@ -59,6 +59,25 @@
             width: 100%;
             max-width: 420px;
         }
+        .device-code-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 3.5rem;
+            height: 3.5rem;
+            margin: 0 auto;
+            border-radius: 9999px;
+            background: color-mix(in oklab, var(--primary) 15%, transparent);
+            color: var(--primary);
+        }
+        .device-code-input {
+            height: 3.5rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 1.75rem;
+            letter-spacing: 0.4em;
+            text-align: center;
+            padding-left: 0.4em; /* balances the trailing letter-spacing */
+        }
     </style>
 </head>
 
@@ -204,9 +223,14 @@
                                         <input type="email" id="login-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder" data-icon="mail">
                                     </div>
 
-                                    <div class="grid gap-2">
-                                        <label for="login-password" data-i18n="auth.password">Password</label>
-                                        <input type="password" id="login-password" name="password" class="input" required autocomplete="current-password" placeholder="Your password" data-i18n-placeholder="auth.passwordPlaceholder" data-icon="lock">
+                                    <!-- Email-first: the password step only appears for accounts
+                                         without a paired phone (those sign in with the phone's code). -->
+                                    <div class="grid gap-2" id="login-password-group" hidden>
+                                        <div class="flex items-center justify-between">
+                                            <label for="login-password" data-i18n="auth.password">Password</label>
+                                            <button type="button" id="login-change-email-btn" class="text-xs text-blue-400 hover:underline" data-i18n="auth.changeEmail">Use a different email</button>
+                                        </div>
+                                        <input type="password" id="login-password" name="password" class="input" autocomplete="current-password" placeholder="Your password" data-i18n-placeholder="auth.passwordPlaceholder" data-icon="lock">
                                     </div>
 
                                     <button type="submit" class="btn-primary is-cta w-full mt-2" id="login-btn">
@@ -215,7 +239,7 @@
                                             <polyline points="10 17 15 12 10 7"/>
                                             <line x1="15" y1="12" x2="3" y2="12"/>
                                         </svg>
-                                        <span id="login-btn-text" data-i18n="auth.signIn">Sign In</span>
+                                        <span id="login-btn-text" data-i18n="auth.continue">Continue</span>
                                     </button>
 
                                     <div class="text-center mt-3">
@@ -389,6 +413,58 @@
                         </div>
                     </div>
 
+                    <!-- Paired phone: second login step with the code shown in the app -->
+                    <div id="panel-device-code" hidden>
+                        <div class="py-4 grid gap-4">
+                            <div class="device-code-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+                            </div>
+                            <div class="text-center grid gap-1">
+                                <h2 class="text-lg font-semibold" data-i18n="auth.deviceCodeTitle">Confirm on your phone</h2>
+                                <p id="device-code-hint" class="text-sm" style="color: var(--muted-foreground);"></p>
+                            </div>
+                            <form id="device-code-form" class="form grid gap-3">
+                                <label for="device-code-input" class="sr-only" data-i18n="auth.deviceCodeLabel">6-digit code</label>
+                                <input type="text" id="device-code-input" class="input device-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000000" spellcheck="false" required>
+                                <p id="device-code-timer" class="text-xs text-center" style="color: var(--muted-foreground);"></p>
+                                <button type="submit" class="btn-primary is-cta w-full" id="device-code-btn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                                    <span data-i18n="auth.deviceCodeConfirm">Sign in</span>
+                                </button>
+                            </form>
+                            <div class="text-center flex flex-col gap-2">
+                                <button type="button" id="device-lost-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.deviceLost">Lost your phone or reinstalled the app?</button>
+                                <button type="button" id="device-code-back-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.backToLogin">Back to Sign In</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lost phone: remove the pairing with password + recovery key -->
+                    <div id="panel-device-lost" hidden>
+                        <div class="py-4 grid gap-4">
+                            <div class="text-center grid gap-1">
+                                <h2 class="text-lg font-semibold" data-i18n="auth.deviceLostTitle">Remove paired phone</h2>
+                                <p class="text-sm" style="color: var(--muted-foreground);" data-i18n="auth.deviceLostText">With your password and your recovery key you can remove the pairing. Afterwards you sign in as usual and can pair a new phone.</p>
+                            </div>
+                            <form id="device-lost-form" class="form grid gap-4">
+                                <div class="grid gap-2">
+                                    <label for="device-lost-password" data-i18n="auth.password">Password</label>
+                                    <input type="password" id="device-lost-password" class="input" required autocomplete="current-password" placeholder="Your password" data-i18n-placeholder="auth.passwordPlaceholder">
+                                </div>
+                                <div class="grid gap-2">
+                                    <label for="device-lost-key" data-i18n="auth.recoveryKey">Recovery Key</label>
+                                    <input type="text" id="device-lost-key" class="input font-mono" required autocomplete="off" placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" data-i18n-placeholder="auth.recoveryKeyPlaceholder" spellcheck="false">
+                                </div>
+                                <button type="submit" class="btn-primary is-cta w-full" id="device-lost-submit">
+                                    <span data-i18n="auth.deviceLostSubmit">Remove pairing and sign in</span>
+                                </button>
+                            </form>
+                            <div class="text-center">
+                                <button type="button" id="device-lost-back-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.back">Back</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Token Reset Panel (shown when ?token= in URL) -->
                     <div id="panel-token-reset" hidden>
                         <div class="py-4">
@@ -515,9 +591,15 @@
         const resetSubpanelKey = document.getElementById('reset-subpanel-key');
         const resetSubpanelEmail = document.getElementById('reset-subpanel-email');
 
+        const panelDeviceCode = document.getElementById('panel-device-code');
+        const panelDeviceLost = document.getElementById('panel-device-lost');
+
         function hideAllCustomPanels() {
             panelReset.hidden = true;
             panelTokenReset.hidden = true;
+            panelDeviceCode.hidden = true;
+            panelDeviceLost.hidden = true;
+            stopDeviceCodeTimer();
         }
 
         function showResetPanel(showEmail = false) {
@@ -542,8 +624,211 @@
         function showLoginPanel() {
             authTabsNav.style.display = '';
             hideAllCustomPanels();
+            setLoginStep('email');
             document.getElementById('tab-login').click();
         }
+
+        // ---- Email-first login: 'email' step, then 'password' (no paired phone) ----
+        let loginStep = 'email';
+        function setLoginStep(step) {
+            loginStep = step;
+            const pwGroup = document.getElementById('login-password-group');
+            const pw = document.getElementById('login-password');
+            const email = document.getElementById('login-email');
+            pwGroup.hidden = step !== 'password';
+            pw.required = step === 'password';
+            email.readOnly = step === 'password';
+            const label = document.getElementById('login-btn-text');
+            label.dataset.i18n = step === 'password' ? 'auth.signIn' : 'auth.continue';
+            label.textContent = t(label.dataset.i18n);
+            if (step === 'password') pw.focus();
+            else pw.value = '';
+        }
+
+        document.getElementById('login-change-email-btn').addEventListener('click', () => {
+            setLoginStep('email');
+            document.getElementById('login-email').focus();
+        });
+
+        async function startLogin(force) {
+            const btn = document.getElementById('login-btn');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `${SPINNER_SVG}<span>${t('auth.signingIn')}</span>`;
+            const restore = () => { btn.disabled = false; btn.innerHTML = originalHtml; };
+            try {
+                const response = await fetch('/api/login/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: document.getElementById('login-email').value, force: !!force })
+                });
+                const data = await response.json();
+                restore();
+                if (response.status === 409) {
+                    if (await showSessionConflictDialog()) await startLogin(true);
+                } else if (response.status === 202 && data.code === 'device_code_required') {
+                    showDeviceCodePanel(data);
+                } else if (response.ok && data.next === 'password') {
+                    setLoginStep('password');
+                } else if (response.status === 429) {
+                    showRateLimitDialog(data.message ? t(data.message, data.message_params || {}) : null);
+                } else {
+                    showToast(data.message ? t(data.message) : t('auth.loginFailed'));
+                }
+            } catch (error) {
+                restore();
+                showToast(t('error.somethingWrong'));
+            }
+        }
+
+        // ---- Paired phone: one-time code step ----
+        let devicePending = null;   // { id, device, expiresAt }
+        let deviceCodeTimer = null;
+
+        function stopDeviceCodeTimer() {
+            if (deviceCodeTimer) clearInterval(deviceCodeTimer);
+            deviceCodeTimer = null;
+        }
+
+        function showDeviceCodePanel(data) {
+            devicePending = {
+                id: data.pending_id,
+                device: data.device_name || '',
+                expiresAt: Date.now() + (data.expires_in || 180) * 1000
+            };
+            authTabsNav.style.display = 'none';
+            panelLogin.hidden = true;
+            panelRegister.hidden = true;
+            document.getElementById('panel-register-org').hidden = true;
+            hideAllCustomPanels();
+            panelDeviceCode.hidden = false;
+            document.getElementById('device-code-hint').textContent = devicePending.device
+                ? t('auth.deviceCodeHint', { device: devicePending.device })
+                : t('auth.deviceCodeHintNoName');
+            const input = document.getElementById('device-code-input');
+            input.value = '';
+            input.disabled = false;
+            document.getElementById('device-code-btn').disabled = false;
+            input.focus();
+            const timerEl = document.getElementById('device-code-timer');
+            const tick = () => {
+                const left = Math.max(0, Math.round((devicePending.expiresAt - Date.now()) / 1000));
+                if (left === 0) {
+                    stopDeviceCodeTimer();
+                    timerEl.textContent = t('auth.deviceCodeExpired');
+                    input.disabled = true;
+                    document.getElementById('device-code-btn').disabled = true;
+                    return;
+                }
+                const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
+                timerEl.textContent = t('auth.deviceCodeValidFor', { time: `${mm}:${ss}` });
+            };
+            stopDeviceCodeTimer();
+            tick();
+            deviceCodeTimer = setInterval(tick, 1000);
+        }
+
+        document.getElementById('device-code-input').addEventListener('input', (e) => {
+            const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+            e.target.value = digits;
+            // Six digits typed → submit right away, saves a click.
+            if (digits.length === 6) document.getElementById('device-code-form').requestSubmit();
+        });
+
+        document.getElementById('device-code-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!devicePending) return;
+            const input = document.getElementById('device-code-input');
+            const btn = document.getElementById('device-code-btn');
+            const code = input.value.replace(/\D/g, '');
+            if (code.length !== 6) return;
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/login/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pending_id: devicePending.id, code })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    stopDeviceCodeTimer();
+                    await finishLoginFlow(data);
+                    return;
+                }
+                if (response.status === 429) {
+                    showRateLimitDialog(data.message ? t(data.message, data.message_params || {}) : null);
+                } else {
+                    showToast(t(data.message || 'auth.loginFailed', data.message_params || {}));
+                }
+                if (response.status === 410 || response.status === 403) {
+                    devicePending = null;
+                    showLoginPanel();
+                    return;
+                }
+                input.value = '';
+                input.focus();
+            } catch (err) {
+                showToast(t('error.somethingWrong'));
+            }
+            btn.disabled = false;
+        });
+
+        document.getElementById('device-code-back-btn').addEventListener('click', () => {
+            devicePending = null;
+            showLoginPanel();
+        });
+
+        document.getElementById('device-lost-btn').addEventListener('click', () => {
+            hideAllCustomPanels();
+            panelDeviceLost.hidden = false;
+            document.getElementById('device-lost-password').focus();
+        });
+
+        document.getElementById('device-lost-back-btn').addEventListener('click', () => {
+            if (devicePending) showDeviceCodePanel({
+                pending_id: devicePending.id,
+                device_name: devicePending.device,
+                expires_in: Math.max(0, (devicePending.expiresAt - Date.now()) / 1000)
+            });
+            else showLoginPanel();
+        });
+
+        document.getElementById('device-lost-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('device-lost-submit');
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/login/device-lost', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('login-email').value,
+                        password: document.getElementById('device-lost-password').value,
+                        recovery_key: document.getElementById('device-lost-key').value
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    // Pairing gone → plain password login with the password just entered.
+                    const pw = document.getElementById('device-lost-password').value;
+                    document.getElementById('device-lost-key').value = '';
+                    document.getElementById('device-lost-password').value = '';
+                    devicePending = null;
+                    showToast(t('backend.deviceUnpaired'), 'success');
+                    showLoginPanel();
+                    setLoginStep('password');
+                    document.getElementById('login-password').value = pw;
+                    await performLogin(false);
+                } else if (response.status === 429) {
+                    showRateLimitDialog(data.message ? t(data.message, data.message_params || {}) : null);
+                } else {
+                    showToast(t(data.message || 'error.somethingWrong'));
+                }
+            } catch (err) {
+                showToast(t('error.somethingWrong'));
+            }
+            btn.disabled = false;
+        });
 
         // Sub-panel switching
         document.getElementById('switch-to-email-reset-btn').addEventListener('click', () => {
@@ -646,6 +931,36 @@
             });
         }
 
+        // Everything after the session exists: recovery-key nag, then into the app.
+        // Shared by the password login and the paired-phone code step.
+        async function finishLoginFlow(data) {
+            // If user has no recovery key, generate one and show it before proceeding
+            if (data.needs_recovery_key) {
+                try {
+                    const rkResp = await fetch('/api/recovery-key/generate', { method: 'POST' });
+                    const rkData = await rkResp.json();
+                    if (rkData.success && rkData.recovery_key) {
+                        document.getElementById('recovery-key-display').textContent = rkData.recovery_key;
+                        document.getElementById('recovery-key-dialog').showModal();
+                        // Redirect happens when user confirms (continue button)
+                        document.getElementById('recovery-key-continue-btn').addEventListener('click', () => {
+                            document.getElementById('recovery-key-dialog').close();
+                            sessionStorage.setItem('avoShowIntro', '1');
+                            window.location.href = '/';
+                        }, { once: true });
+                        return; // Don't redirect yet
+                    }
+                } catch (e) {
+                    // Non-fatal: proceed to app anyway
+                }
+            }
+
+            showToast(t('auth.welcomeBack'), 'success');
+            await delay(300);
+            sessionStorage.setItem('avoShowIntro', '1');
+            window.location.href = '/';
+        }
+
         async function performLogin(force) {
             const btn = document.getElementById('login-btn');
             const originalHtml = btn.innerHTML;
@@ -689,6 +1004,14 @@
 
                 const data = await response.json();
 
+                if (response.status === 202 && data.code === 'device_code_required') {
+                    hideProgress();
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                    showDeviceCodePanel(data);
+                    return;
+                }
+
                 if (data.success) {
                     // Step 2: Decrypting (longest step)
                     setProgress(50, t('loading.decryptingData'));
@@ -709,32 +1032,7 @@
                     await delay(300);
 
                     hideProgress();
-
-                    // If user has no recovery key, generate one and show it before proceeding
-                    if (data.needs_recovery_key) {
-                        try {
-                            const rkResp = await fetch('/api/recovery-key/generate', { method: 'POST' });
-                            const rkData = await rkResp.json();
-                            if (rkData.success && rkData.recovery_key) {
-                                document.getElementById('recovery-key-display').textContent = rkData.recovery_key;
-                                document.getElementById('recovery-key-dialog').showModal();
-                                // Redirect happens when user confirms (continue button)
-                                document.getElementById('recovery-key-continue-btn').addEventListener('click', () => {
-                                    document.getElementById('recovery-key-dialog').close();
-                                    sessionStorage.setItem('avoShowIntro', '1');
-                                    window.location.href = '/';
-                                }, { once: true });
-                                return; // Don't redirect yet
-                            }
-                        } catch (e) {
-                            // Non-fatal: proceed to app anyway
-                        }
-                    }
-
-                    showToast(t('auth.welcomeBack'), 'success');
-                    await delay(300);
-                    sessionStorage.setItem('avoShowIntro', '1');
-                    window.location.href = '/';
+                    await finishLoginFlow(data);
                 } else if (response.status === 429) {
                     hideProgress();
                     showRateLimitDialog(data.message ? t(data.message, data.message_params || {}) : null);
@@ -758,7 +1056,8 @@
         // re-call it with `force=true` after the session-conflict prompt.
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            await performLogin(false);
+            if (loginStep === 'email') await startLogin(false);
+            else await performLogin(false);
         });
 
         // Register form handler
