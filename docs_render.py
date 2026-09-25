@@ -18,6 +18,7 @@ NAV = [
     ('Erste Schritte', [
         'erste-schritte/registrierung',
         'erste-schritte/anmeldung',
+        'erste-schritte/handy-kopplung',
         'erste-schritte/wiederherstellungsschluessel',
         'erste-schritte/profil-einrichten',
         'erste-schritte/tutorial',

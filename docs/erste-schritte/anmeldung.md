@@ -8,8 +8,10 @@ title: Anmeldung
 ## Login
 
 1. Öffnen Sie die EduGrade-Webseite
-2. Geben Sie Ihre **E-Mail-Adresse** und Ihr **Passwort** ein
-3. Klicken Sie auf **Anmelden**
+2. Geben Sie Ihre **E-Mail-Adresse** ein und klicken Sie auf **Weiter**
+3. Geben Sie Ihr **Passwort** ein und klicken Sie auf **Anmelden**
+
+Ist Ihr Konto mit einem Handy gekoppelt, entfällt das Passwort: Nach der E-Mail-Adresse tippen Sie stattdessen den 6-stelligen Code aus der EduGrade-App ab – siehe [Handy-Kopplung](handy-kopplung.md).
 
 ![Login-Formular](/img/login-form.png)
 
