@@ -2873,3 +2873,82 @@ html.dark .behavior-negative { --behavior-color: #f87171; --behavior-bg: rgba(23
         font-size: 0.8rem;
     }
 }
+
+/* ========== APP-DOWNLOAD-DIALOG ========== */
+.app-dl-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+.app-dl-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 1rem 0.75rem;
+    border: 2px solid var(--border);
+    border-radius: 0.75rem;
+    background: transparent;
+    color: inherit;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.app-dl-option:hover {
+    border-color: var(--primary);
+}
+.app-dl-option[aria-pressed="true"] {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+.app-dl-option .lucide {
+    width: 1.75rem;
+    height: 1.75rem;
+}
+.app-dl-option-name {
+    font-weight: 700;
+}
+.app-dl-option-sub {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+}
+/* iOS: ausgegraut + Schloss, bleibt aber klickbar (zeigt den Spendenlink) */
+.app-dl-option.is-locked {
+    border-style: dashed;
+    opacity: 0.55;
+    filter: grayscale(1);
+}
+.app-dl-option.is-locked:hover,
+.app-dl-option.is-locked[aria-pressed="true"] {
+    border-color: var(--muted-foreground);
+    background: var(--muted);
+    opacity: 0.8;
+}
+
+.app-dl-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1rem;
+    text-align: center;
+}
+.app-dl-panel[hidden] {
+    display: none;
+}
+/* QR-Codes brauchen hellen Hintergrund, auch im Dark Mode */
+.app-dl-qr {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 216px;
+    height: 216px;
+    padding: 8px;
+    border-radius: 0.75rem;
+    background: #fff;
+    border: 1px solid var(--border);
+}
+.app-dl-qr img {
+    width: 200px;
+    height: 200px;
+}

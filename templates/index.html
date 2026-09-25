@@ -447,6 +447,13 @@
                                             </svg>
                                             <span data-i18n="nav.docs">Documentation</span>
                                         </a>
+                                        <button type="button" id="app-download-btn" class="btn-ghost w-full" style="justify-content: flex-start;">
+                                            <svg class="lucide lucide-smartphone-icon lucide-smartphone" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+                                                <path d="M12 18h.01" />
+                                            </svg>
+                                            <span data-i18n="nav.appDownload">Download app</span>
+                                        </button>
                                         <button type="button" class="btn-ghost w-full" style="justify-content: flex-start;"
                                             onclick="document.dispatchEvent(new CustomEvent('basecoat:theme'))">
                                             <svg class="hidden dark:block lucide lucide-sun-icon lucide-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
@@ -973,6 +980,79 @@
                         </button>
                     </div>
                 </dialog>
+                <!-- App-Download: Android → QR-Code zur neuesten APK, iOS gesperrt → Ko-fi -->
+                <dialog id="app-download-dialog" class="dialog w-full sm:max-w-[480px]"
+                    aria-labelledby="app-download-title">
+                    <div>
+                        <header>
+                            <h2 id="app-download-title" data-i18n="appDownload.title">EduGrade as an app</h2>
+                            <p data-i18n="appDownload.description">Choose your platform.</p>
+                        </header>
+                        <section>
+                            <div class="app-dl-options">
+                                <button type="button" class="app-dl-option" data-app-platform="android" aria-pressed="false" aria-controls="app-dl-android-panel">
+                                    <svg class="lucide lucide-smartphone-icon lucide-smartphone" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+                                        <path d="M12 18h.01" />
+                                    </svg>
+                                    <span class="app-dl-option-name">Android</span>
+                                    <span class="app-dl-option-sub" data-i18n="appDownload.androidSub">QR code to the latest version</span>
+                                </button>
+                                <button type="button" class="app-dl-option is-locked" data-app-platform="ios" aria-pressed="false" aria-controls="app-dl-ios-panel">
+                                    <svg class="lucide lucide-lock-icon lucide-lock" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                    </svg>
+                                    <span class="app-dl-option-name">iOS</span>
+                                    <span class="app-dl-option-sub" data-i18n="appDownload.iosUnavailable">Not available due to financial hurdles</span>
+                                </button>
+                            </div>
+
+                            <div id="app-dl-android-panel" class="app-dl-panel" hidden>
+                                <div id="app-dl-qr" class="app-dl-qr" aria-live="polite"></div>
+                                <p class="text-sm" data-i18n="appDownload.scanHint">Scan the QR code with your Android device to download the latest version.</p>
+                                <p id="app-dl-meta" class="text-xs text-gray-400"></p>
+                                <a id="app-dl-direct" class="btn-sm-outline hidden" href="/download/edugrade.apk">
+                                    <svg class="lucide lucide-download-icon lucide-download" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M12 15V3" />
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <path d="m7 10 5 5 5-5" />
+                                    </svg>
+                                    <span data-i18n="appDownload.direct">Download directly</span>
+                                </a>
+                                <p class="text-xs text-gray-400" data-i18n="appDownload.unknownSources">Beta — installation from unknown sources must be allowed.</p>
+                            </div>
+
+                            <div id="app-dl-ios-panel" class="app-dl-panel" hidden>
+                                <p class="text-sm" data-i18n="appDownload.iosText">Publishing on the App Store is currently not financially feasible for us. A donation helps make the iOS app possible.</p>
+                                <a class="btn-primary" href="https://ko-fi.com/avocloudnet" target="_blank" rel="noopener noreferrer">
+                                    <svg class="lucide lucide-coffee-icon lucide-coffee" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M10 2v2" />
+                                        <path d="M14 2v2" />
+                                        <path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1" />
+                                        <path d="M6 2v2" />
+                                    </svg>
+                                    <span data-i18n="appDownload.donate">Donate on Ko-fi</span>
+                                </a>
+                                <a class="text-xs text-gray-400 underline" href="https://ko-fi.com/avocloudnet" target="_blank" rel="noopener noreferrer">ko-fi.com/avocloudnet</a>
+                            </div>
+                        </section>
+                        <footer class="flex justify-end gap-2">
+                            <button type="button" class="btn-outline" onclick="this.closest('dialog').close()"
+                                data-i18n="dialog.close">Close</button>
+                        </footer>
+                        <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()"
+                            data-tooltip="Close dialog" data-i18n-tooltip="dialog.closeDialog" data-side="top">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" class="lucide lucide-x-icon lucide-x">
+                                <path d="M18 6 6 18" />
+                                <path d="m6 6 12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </dialog>
+
                 <script>
                     // Ko-fi iframe loads on first open only — no third-party request on page load.
                     function openSupportDialog() {
@@ -2180,6 +2260,7 @@ Anna,,Schmidt</code></pre>
     <script src="/static/scripts/organisation.js?v={{ app_version }}"></script>
     <script src="/static/scripts/webuntis.js?v={{ app_version }}"></script>
     <script src="/static/scripts/moodle.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/appDownload.js?v={{ app_version }}"></script>
     <script src="/static/scripts/mobile.js?v={{ app_version }}"></script>
     <script src="/static/scripts/app-promo.js?v={{ app_version }}"></script>
 

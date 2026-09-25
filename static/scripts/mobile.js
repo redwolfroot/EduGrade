@@ -335,6 +335,13 @@
                 </svg>
                 <span>${tr("nav.about", "Über")}</span>
             </a>
+            <button type="button" data-sheet-act="appDownload">
+                <svg class="lucide lucide-smartphone-icon lucide-smartphone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
+                    <path d="M12 18h.01"/>
+                </svg>
+                <span>${tr("nav.appDownload", "App-Download")}</span>
+            </button>
             <button type="button" data-sheet-act="support">
                 <svg class="lucide lucide-coffee-icon lucide-coffee" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M10 2v2"/>
@@ -382,6 +389,7 @@
                 case "export":   { const b = document.getElementById("export-data"); if (b) b.click(); break; }
                 case "theme":    document.dispatchEvent(new CustomEvent("basecoat:theme")); break;
                 case "support":  { const b = document.getElementById("support-btn"); if (b) b.click(); break; }
+                case "appDownload": { const b = document.getElementById("app-download-btn"); if (b) b.click(); break; }
                 case "logout":   { const b = document.getElementById("logout-btn"); if (b) b.click(); break; }
                 case "about":    /* anchor handles navigation */ break;
             }
