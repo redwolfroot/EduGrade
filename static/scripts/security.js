@@ -339,7 +339,19 @@ const sanitizeImportData = (data) => {
                         enteredAsPercent: Boolean(grade.enteredAsPercent),
                         percentValue: grade.percentValue ? parseFloat(grade.percentValue) : null
                     })) : [],
-                    participation: student.participation || []
+                    participation: student.participation || [],
+                    // Verhaltensprotokoll: Beschreibung bleibt Klartext (wird beim Rendern escaped)
+                    behavior: Array.isArray(student.behavior) ? student.behavior
+                        .filter(b => b && /^\d{4}-\d{2}-\d{2}$/.test(b.date) && /^\d{2}:\d{2}$/.test(b.time))
+                        .map(b => ({
+                            id: String(b.id || ''),
+                            subjectId: b.subjectId ? String(b.subjectId) : null,
+                            date: b.date,
+                            time: b.time,
+                            type: ['positive', 'neutral', 'negative'].includes(b.type) ? b.type : 'neutral',
+                            note: String(b.note || '').slice(0, 500),
+                            createdAt: parseInt(b.createdAt, 10) || Date.now()
+                        })) : []
                 };
             };
 

@@ -1971,6 +1971,9 @@ const renderStudents = () => {
                 <button class="btn-icon btn-primary mr-1" data-add-grade="${safeAttr(student.id)}" data-tooltip="${currentSubjectName ? t("tooltip.addGradeToStudent", { student: `${student.firstName} ${student.lastName}`.trim(), subject: currentSubjectName }) : t("grade.addGrade")}" data-side="top">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-icon lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                 </button>
+                <button class="btn-icon btn-secondary mr-1" data-log-behavior="${safeAttr(student.id)}" data-tooltip="${safeAttr(currentSubjectName ? t("tooltip.logBehaviorFor", { student: `${student.firstName} ${student.lastName}`.trim(), subject: currentSubjectName }) : t("behavior.logBehavior"))}" data-side="top">
+                  ${lucideIcon('clipboard-pen-line')}
+                </button>
                 <button class="btn-icon btn-secondary mr-1" data-edit-student="${safeAttr(student.id)}" data-tooltip="${t("tooltip.renameStudent", { student: `${student.firstName} ${student.lastName}`.trim() })}" data-side="top">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-pen-icon lucide-user-pen"><path d="M11.5 15H7a4 4 0 0 0-4 4v2"/><path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><circle cx="10" cy="7" r="4"/></svg>
                 </button>
@@ -2002,6 +2005,15 @@ const renderStudents = () => {
     document.querySelectorAll("[data-add-grade]").forEach(btn => {
         btn.addEventListener("click", () => {
             openAddGradeDialog(btn.dataset.addGrade, () => renderStudents());
+        });
+    });
+
+    document.querySelectorAll("[data-log-behavior]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const studentId = btn.dataset.logBehavior;
+            openBehaviorDialog(studentId, null, () => {
+                if (_qsbCurrentStudentId === studentId) _renderStudentQuickContent(studentId);
+            });
         });
     });
 
@@ -3472,6 +3484,16 @@ const _renderStudentQuickContent = (studentId) => {
             </div>`;
         }).join("");
 
+    // Behavior log (current subject, newest first; the full list lives in the detail view)
+    const QSB_BEHAVIOR_LIMIT = 5;
+    const behaviorEntries = getBehaviorEntries(student, sid);
+    const behaviorListHtml = behaviorEntries.length === 0
+        ? `<p style="opacity:0.45;font-size:0.85em;padding:0.5rem 0">${escapeHtml(t("behavior.noEntries"))}</p>`
+        : `<div class="behavior-list">${behaviorEntries.slice(0, QSB_BEHAVIOR_LIMIT).map(b => behaviorEntryHtml(b)).join("")}</div>`
+          + (behaviorEntries.length > QSB_BEHAVIOR_LIMIT
+            ? `<p style="opacity:0.5;font-size:0.8em;padding:0.4rem 0">${escapeHtml(t("behavior.moreInDetail", { count: behaviorEntries.length - QSB_BEHAVIOR_LIMIT }))}</p>`
+            : "");
+
     if (window.qsbChartInstance) { window.qsbChartInstance.destroy(); window.qsbChartInstance = null; }
 
     const _qsbMkSemBtn = (label, val) => {
@@ -3482,6 +3504,7 @@ const _renderStudentQuickContent = (studentId) => {
     document.getElementById("qsb-content").innerHTML = `
         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap">
             <button id="qsb-add-grade-btn" class="btn-primary" style="flex:1;font-size:0.85rem;padding:0.4rem 0.75rem;min-width:8rem">${lucideIcon('plus')} ${t("grade.addGrade")}</button>
+            <button id="qsb-log-behavior-btn" class="btn-outline" style="font-size:0.85rem;padding:0.4rem 0.75rem" data-tooltip="${safeAttr(t("behavior.logBehavior"))}" data-side="bottom">${lucideIcon('clipboard-pen-line')} ${escapeHtml(t("behavior.short"))}</button>
             <div style="display:flex;gap:0.25rem;flex-shrink:0">
                 ${_qsbMkSemBtn(t("semester.all") || "Gesamt", null)}
                 ${_qsbMkSemBtn(t("semester.WS") || "WS", "WS")}
@@ -3541,11 +3564,20 @@ const _renderStudentQuickContent = (studentId) => {
         <!-- Grades list -->
         <div class="qsb-section-title">${_qsbSemesterFilter || (t("semester.all") || "Gesamt")}${currentSubjectName ? ` · ${escapeHtml(currentSubjectName)}` : ""}</div>
         <div>${gradeListHtml}</div>
+
+        <!-- Behavior log -->
+        <div class="qsb-section-title">${escapeHtml(t("behavior.title"))}${currentSubjectName ? ` · ${escapeHtml(currentSubjectName)}` : ""}</div>
+        <div>${behaviorListHtml}</div>
     `;
 
     // Wire add-grade button
     document.getElementById("qsb-add-grade-btn")?.addEventListener("click", () => {
         openAddGradeDialog(studentId, () => _renderStudentQuickContent(studentId));
+    });
+
+    // Wire behavior button
+    document.getElementById("qsb-log-behavior-btn")?.addEventListener("click", () => {
+        openBehaviorDialog(studentId, null, () => _renderStudentQuickContent(studentId));
     });
 
     // Wire semester filter buttons
@@ -4170,6 +4202,9 @@ const renderStudentDetail = (studentId) => {
         // Hide attendance section if no data
         document.getElementById("student-attendance-section").style.display = 'none';
     }
+
+    // Behavior log for the current subject (always shown — it hosts the add button)
+    renderStudentBehaviorSection(student, currentSubjectId);
 
     // Render chart, category breakdown, and grades table with filtered grades
     const filteredStudent = { ...student, grades: filteredGrades };
@@ -5385,6 +5420,45 @@ function renderStudentAttendanceList(student) {
       const entryId = btn.dataset.deleteAttendance;
       deleteAttendanceEntry(student.id, entryId);
     });
+  });
+}
+
+/**
+ * Renders the behavior log section of the student detail view: per-type counts
+ * and the entries of the given subject, newest first.
+ */
+function renderStudentBehaviorSection(student, subjectId) {
+  const summaryEl = document.getElementById('student-behavior-summary');
+  const listEl = document.getElementById('student-behavior-list');
+  if (!summaryEl || !listEl) return;
+
+  const entries = getBehaviorEntries(student, subjectId);
+  const rerender = () => renderStudentDetail(student.id);
+
+  const addBtn = document.getElementById('student-behavior-add');
+  if (addBtn) addBtn.onclick = () => openBehaviorDialog(student.id, null, rerender);
+
+  summaryEl.innerHTML = BEHAVIOR_TYPES.map(type => {
+    const count = entries.filter(e => e.type === type).length;
+    return `<span class="behavior-badge behavior-${type}">${lucideIcon(BEHAVIOR_TYPE_ICONS[type])}${escapeHtml(t('behavior.' + type))}: ${count}</span>`;
+  }).join('');
+
+  if (entries.length === 0) {
+    listEl.innerHTML = `<p class="text-center text-gray-400 text-sm py-2">${escapeHtml(t('behavior.noEntries'))}</p>`;
+    return;
+  }
+
+  listEl.innerHTML = entries.map(entry => behaviorEntryHtml(entry, `
+          <div class="behavior-entry-actions">
+            <button class="btn-icon btn-secondary btn-small" data-edit-behavior="${safeAttr(entry.id)}" data-tooltip="${safeAttr(t('behavior.editEntry'))}" data-side="left">${lucideIcon('square-pen')}</button>
+            <button class="btn-icon btn-destructive btn-small" data-delete-behavior="${safeAttr(entry.id)}" data-tooltip="${safeAttr(t('dialog.delete'))}" data-side="left">${lucideIcon('trash')}</button>
+          </div>`)).join('');
+
+  listEl.querySelectorAll('[data-edit-behavior]').forEach(btn => {
+    btn.addEventListener('click', () => openBehaviorDialog(student.id, btn.dataset.editBehavior, rerender));
+  });
+  listEl.querySelectorAll('[data-delete-behavior]').forEach(btn => {
+    btn.addEventListener('click', () => deleteBehaviorEntry(student.id, btn.dataset.deleteBehavior, rerender));
   });
 }
 

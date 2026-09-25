@@ -39,6 +39,7 @@ NAV = [
         'schueler/schueler-importieren',
         'schueler/schueler-bearbeiten',
         'schueler/schueler-loeschen',
+        'schueler/verhaltensprotokoll',
     ]),
     ('Noten', [
         'noten/note-hinzufuegen',

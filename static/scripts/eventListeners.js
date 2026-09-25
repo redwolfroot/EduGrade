@@ -283,7 +283,8 @@ document.getElementById("confirm-import-students").addEventListener("click", () 
             lastName,
             middleName,
             grades: [],
-            participation: []
+            participation: [],
+            behavior: []
         });
         addedCount++;
     }

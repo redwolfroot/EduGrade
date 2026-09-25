@@ -431,6 +431,10 @@ const openOrgHandoverDialog = () => {
                     <input type="checkbox" id="org-handover-inc-comments" class="checkbox" checked>
                     <span class="text-sm">${t("org.handoverIncludeComments")}</span>
                 </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="org-handover-inc-behavior" class="checkbox" checked>
+                    <span class="text-sm">${t("org.handoverIncludeBehavior")}</span>
+                </label>
             </div>
 
             <p class="text-sm text-amber-500">${t("org.handoverConfirmWarning")}</p>
@@ -538,7 +542,8 @@ const orgSendHandover = async (classId) => {
         categories: document.getElementById('org-handover-inc-categories').checked,
         grades: document.getElementById('org-handover-inc-grades').checked,
         entries: document.getElementById('org-handover-inc-entries').checked,
-        comments: document.getElementById('org-handover-inc-comments').checked
+        comments: document.getElementById('org-handover-inc-comments').checked,
+        behavior: document.getElementById('org-handover-inc-behavior').checked
     };
 
     try {

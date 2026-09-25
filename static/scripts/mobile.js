@@ -486,18 +486,29 @@
         sheet.classList.add("is-open");
     }
 
-    /* ---------- FAB choice on class view: new student / new grade ---------- */
+    /* ---------- FAB choice on class view: new grade / behavior entry / new student ---------- */
     function openClassFabChoice() {
         openListPicker({
             title: tr("mobile.fabChoiceTitle", "Was möchtest du hinzufügen?"),
             showSearch: false,
             items: [
-                { id: "grade",   name: tr("mobile.newGrade",   "Neue Note") },
-                { id: "student", name: tr("mobile.newStudent", "Neuer Schüler") },
+                { id: "grade",    name: tr("mobile.newGrade",       "Neue Note") },
+                { id: "behavior", name: tr("behavior.logBehavior",  "Verhalten protokollieren") },
+                { id: "student",  name: tr("mobile.newStudent",     "Neuer Schüler") },
             ],
             onPick: (id) => {
                 if (id === "grade") {
-                    openStudentPickerForGrade();
+                    openStudentPicker((studentId) => {
+                        if (typeof openAddGradeDialog === "function") {
+                            openAddGradeDialog(studentId, () => {
+                                if (typeof renderStudents === "function") renderStudents();
+                            });
+                        }
+                    });
+                } else if (id === "behavior") {
+                    openStudentPicker((studentId) => {
+                        if (typeof openBehaviorDialog === "function") openBehaviorDialog(studentId);
+                    });
                 } else if (id === "student") {
                     const btn = document.getElementById("add-student");
                     if (btn) btn.click();
@@ -507,7 +518,7 @@
     }
 
     /* ---------- Student picker (FAB on class view) ---------- */
-    function openStudentPickerForGrade() {
+    function openStudentPicker(onPickStudent) {
         if (typeof getCurrentClass !== "function" || typeof getCurrentYear !== "function") return;
         const cls = getCurrentClass();
         const year = getCurrentYear();
@@ -536,13 +547,7 @@
                 search: `${s.lastName || ""} ${s.firstName || ""} ${s.middleName || ""}`,
                 meta: Array.isArray(s.grades) ? s.grades.length : 0,
             })),
-            onPick: (studentId) => {
-                if (typeof openAddGradeDialog === "function") {
-                    openAddGradeDialog(studentId, () => {
-                        if (typeof renderStudents === "function") renderStudents();
-                    });
-                }
-            },
+            onPick: onPickStudent,
         });
     }
 

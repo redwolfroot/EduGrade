@@ -160,7 +160,8 @@ const addYear = (classId, name, copyFromYearId = null, dates = null, keepStudent
                 lastName: student.lastName,
                 middleName: student.middleName,
                 grades: [],
-                participation: []
+                participation: [],
+                behavior: []
             }));
 
             // Set first subject as current if available
@@ -305,7 +306,8 @@ const addStudent = (firstName, lastName, middleName) => {
         middleName: validatedMiddleName,
         notes: '',               // Vertrauliche Notizen (Lernschwächen etc.)
         grades: [],              // Leeres Array für Noten
-        participation: []        // Für zukünftige Mitarbeits-Funktion
+        participation: [],       // Anwesenheitseinträge
+        behavior: []             // Verhaltensprotokoll
     };
 
     // Schüler zum Jahrgang hinzufügen
@@ -915,7 +917,7 @@ const editSubject = (classId, subjectId, newName, minAttendancePercent = null, w
 /**
  * FACH LÖSCHEN
  *
- * Löscht ein Fach und alle zugehörigen Noten.
+ * Löscht ein Fach und alle zugehörigen Noten und Verhaltenseinträge.
  *
  * @param {string} classId - ID der Klasse
  * @param {string} subjectId - ID des zu löschenden Fachs
@@ -930,10 +932,11 @@ const deleteSubject = (classId, subjectId) => {
     // Fach aus dem Array entfernen
     currentYear.subjects = currentYear.subjects.filter(s => s.id !== subjectId);
 
-    // Alle Noten dieses Fachs bei allen Schülern dieses Jahrgangs löschen
+    // Alle Noten und Verhaltenseinträge dieses Fachs bei allen Schülern dieses Jahrgangs löschen
     if (currentYear.students) {
         currentYear.students.forEach(student => {
             student.grades = student.grades.filter(g => g.subjectId !== subjectId);
+            student.behavior = (student.behavior || []).filter(b => b.subjectId !== subjectId);
         });
     }
 
@@ -1876,3 +1879,180 @@ function validateAttendanceInput(date, status, notes) {
 
   return { isValid: true };
 }
+
+// ============ Verhaltensprotokoll ============
+// Einträge liegen pro Schüler in student.behavior (Aufbau: siehe data.js).
+// Die Beschreibung wird als Klartext gespeichert und erst beim Rendern escaped.
+
+const BEHAVIOR_TYPES = ['positive', 'neutral', 'negative'];
+const BEHAVIOR_TYPE_ICONS = { positive: 'smile', neutral: 'meh', negative: 'frown' };
+const BEHAVIOR_NOTE_MAX = 500;
+
+/** Lokales Datum + Uhrzeit ({ date: 'YYYY-MM-DD', time: 'HH:MM' }) — toISOString() wäre UTC. */
+const localDateTimeParts = (d = new Date()) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return {
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`
+    };
+};
+
+/** 'YYYY-MM-DD' → lokalisiertes Datum (ohne UTC-Verschiebung durch new Date(string)). */
+const formatBehaviorDate = (date) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
+    if (!m) return date || '';
+    const locale = I18n.getCurrentLanguage() === 'de' ? 'de-AT' : 'en-GB';
+    return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+/** Einträge eines Schülers (optional nur eines Fachs), neueste zuerst. */
+const getBehaviorEntries = (student, subjectId = null) =>
+    (student?.behavior || [])
+        .filter(b => !subjectId || b.subjectId === subjectId)
+        .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`) || (b.createdAt || 0) - (a.createdAt || 0));
+
+/** Farbiges Badge für einen Eintragstyp (unbekannte Typen werden als neutral dargestellt). */
+const behaviorBadge = (type) => {
+    const safeType = BEHAVIOR_TYPES.includes(type) ? type : 'neutral';
+    return `<span class="behavior-badge behavior-${safeType}">${lucideIcon(BEHAVIOR_TYPE_ICONS[safeType])}${escapeHtml(t('behavior.' + safeType))}</span>`;
+};
+
+/** Listeneintrag: Badge + Zeitpunkt (+ optionale Aktions-Buttons), darunter die Beschreibung. */
+const behaviorEntryHtml = (entry, actionsHtml = '') => `
+    <div class="behavior-entry">
+      <div class="behavior-entry-head">
+        ${behaviorBadge(entry.type)}
+        <span class="behavior-entry-when">${escapeHtml(formatBehaviorDate(entry.date))}, ${escapeHtml(entry.time || '')}</span>
+        ${actionsHtml}
+      </div>
+      <div class="behavior-note">${escapeHtml(entry.note || '')}</div>
+    </div>`;
+
+/** Gibt eine Fehlermeldung zurück oder null, wenn der Eintrag gültig ist. */
+const validateBehaviorInput = (entry, subjects) => {
+    if (!subjects.some(s => s.id === entry.subjectId)) return t('behavior.subjectRequired');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date) || !/^\d{2}:\d{2}$/.test(entry.time)) return t('behavior.invalidDateTime');
+    if (!BEHAVIOR_TYPES.includes(entry.type)) return t('behavior.typeRequired');
+    if (!entry.note) return t('behavior.noteRequired');
+    if (entry.note.length > BEHAVIOR_NOTE_MAX) return t('behavior.noteTooLong', { max: BEHAVIOR_NOTE_MAX });
+    return null;
+};
+
+/**
+ * VERHALTENSEINTRAG ANLEGEN / BEARBEITEN
+ *
+ * Datum und Uhrzeit sind mit "jetzt" vorbelegt, das Fach mit dem aktiven Fach-Tab.
+ *
+ * @param {string} studentId - Schüler im aktuellen Jahrgang
+ * @param {string|null} entryId - Zu bearbeitender Eintrag, null = neuer Eintrag
+ * @param {function|null} onSuccess - Wird nach dem Speichern aufgerufen (Re-Render)
+ */
+const openBehaviorDialog = (studentId, entryId = null, onSuccess = null) => {
+    const currentYear = getCurrentYear();
+    const student = currentYear?.students?.find(s => s.id === studentId);
+    if (!student) return;
+
+    const subjects = currentYear.subjects || [];
+    if (subjects.length === 0) {
+        showAlertDialog(t('grade.noSubjectsError'));
+        return;
+    }
+
+    const existing = entryId ? (student.behavior || []).find(b => b.id === entryId) : null;
+    if (entryId && !existing) return;
+
+    const now = localDateTimeParts();
+    const values = {
+        subjectId: existing?.subjectId ?? currentYear.currentSubjectId ?? subjects[0].id,
+        date: existing?.date || now.date,
+        time: existing?.time || now.time,
+        type: existing?.type || 'neutral',
+        note: existing?.note || ''
+    };
+
+    const content = `
+    <div class="p-3 rounded-lg bg-primary/10">
+      <p class="text-sm font-medium">${escapeHtml(getStudentDisplayName(student))}</p>
+    </div>
+    <div class="grid gap-2">
+      <label for="behavior-subject" class="text-sm font-medium">${t('behavior.subject')}</label>
+      <select id="behavior-subject" name="subjectId" class="select w-full" required>
+        ${subjects.map(s => `<option value="${safeAttr(s.id)}" ${s.id === values.subjectId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="grid gap-2">
+        <label for="behavior-date" class="text-sm font-medium">${t('behavior.date')}</label>
+        <input type="date" id="behavior-date" name="date" class="input w-full" value="${safeAttr(values.date)}" required>
+      </div>
+      <div class="grid gap-2">
+        <label for="behavior-time" class="text-sm font-medium">${t('behavior.time')}</label>
+        <input type="time" id="behavior-time" name="time" class="input w-full" value="${safeAttr(values.time)}" required>
+      </div>
+    </div>
+    <div class="grid gap-2">
+      <span class="text-sm font-medium" id="behavior-type-label">${t('behavior.type')}</span>
+      <div class="behavior-type-options" role="radiogroup" aria-labelledby="behavior-type-label">
+        ${BEHAVIOR_TYPES.map(type => `
+        <label class="behavior-type-option behavior-${type}">
+          <input type="radio" name="type" value="${type}" ${type === values.type ? 'checked' : ''}>
+          ${lucideIcon(BEHAVIOR_TYPE_ICONS[type])}
+          <span>${t('behavior.' + type)}</span>
+        </label>`).join('')}
+      </div>
+    </div>
+    <div class="grid gap-2">
+      <label for="behavior-note" class="text-sm font-medium">${t('behavior.note')}</label>
+      <textarea id="behavior-note" name="note" class="textarea" rows="4" maxlength="${BEHAVIOR_NOTE_MAX}" required placeholder="${safeAttr(t('behavior.notePlaceholder'))}">${escapeHtml(values.note)}</textarea>
+    </div>
+  `;
+
+    const title = existing ? t('behavior.editEntry') : t('behavior.logBehavior');
+    showDialog('edit-dialog', title, content, (formData) => {
+        const entry = {
+            subjectId: String(formData.get('subjectId') || ''),
+            date: String(formData.get('date') || ''),
+            time: String(formData.get('time') || '').slice(0, 5),
+            type: String(formData.get('type') || ''),
+            note: String(formData.get('note') || '').trim()
+        };
+        const error = validateBehaviorInput(entry, subjects);
+        if (error) {
+            showAlertDialog(error);
+            return false;
+        }
+
+        if (existing) {
+            Object.assign(existing, entry);
+        } else {
+            if (!Array.isArray(student.behavior)) student.behavior = [];
+            student.behavior.push({
+                id: Date.now().toString() + Math.random().toString(36).slice(2, 11),
+                ...entry,
+                createdAt: Date.now()
+            });
+        }
+        saveData(t(existing ? 'toast.behaviorEdited' : 'toast.behaviorAdded'), 'success');
+        if (onSuccess) onSuccess();
+    });
+};
+
+/**
+ * VERHALTENSEINTRAG LÖSCHEN (mit Sicherheitsabfrage)
+ *
+ * @param {string} studentId - Schüler im aktuellen Jahrgang
+ * @param {string} entryId - Zu löschender Eintrag
+ * @param {function|null} onSuccess - Wird nach dem Löschen aufgerufen (Re-Render)
+ */
+const deleteBehaviorEntry = (studentId, entryId, onSuccess = null) => {
+    const student = getCurrentYear()?.students?.find(s => s.id === studentId);
+    const entry = student?.behavior?.find(b => b.id === entryId);
+    if (!entry) return;
+
+    const details = `${escapeHtml(formatBehaviorDate(entry.date))}, ${escapeHtml(entry.time || '')} · ${behaviorBadge(entry.type)}`;
+    showConfirmDialog(t('behavior.confirmDelete'), () => {
+        student.behavior = student.behavior.filter(b => b.id !== entryId);
+        saveData(t('toast.behaviorDeleted'), 'success');
+        if (onSuccess) onSuccess();
+    }, details);
+};

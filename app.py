@@ -1050,6 +1050,12 @@ def build_share_snapshot(user_data: dict, class_id: str) -> dict | None:
     
     # Get students from the current year if available, otherwise from class (fallback for backward compatibility)
     students = current_year.get('students', []) if current_year else cls.get('students', [])
+    # The snapshot is master-key encrypted and never shows behavior logs to
+    # students, so don't copy them in (filtered copies — user_data is live).
+    students = [
+        {k: v for k, v in s.items() if k != 'behavior'} if isinstance(s, dict) else s
+        for s in students
+    ]
 
     return {
         'students': students,
@@ -1163,6 +1169,9 @@ def build_handover_snapshot(cls: dict, categories: list, include: dict) -> dict:
                 s['participation'] = []
             if not include.get('comments', True):
                 s['notes'] = ''
+            # Clients without a behavior checkbox follow their "notes" choice.
+            if not include.get('behavior', include.get('comments', True)):
+                s['behavior'] = []
 
     if current_year is not None:
         current_year['students'] = students
@@ -1508,6 +1517,47 @@ def delete_user_class(user_id: str, class_id: str) -> bool:
     if meta_rec is None or meta_rec.get('version') != 2:
         return False
     return db_layer.delete_class(user_id, str(class_id))
+
+
+# Student fields that older clients silently drop: the native apps decode the
+# blob with ignoreUnknownKeys and post the whole thing back, so e.g. Android
+# <= 1.5.5 would wipe every behavior log on its next save. Current clients
+# always send these keys, so a missing key means "unknown to this client".
+PRESERVED_STUDENT_FIELDS = ('behavior',)
+
+
+def _students_by_key(data: dict) -> dict:
+    """Map (class_id, year_id, student_id) -> student dict of a full blob."""
+    students = {}
+    for cls in data.get('classes') or []:
+        if not isinstance(cls, dict):
+            continue
+        for year in cls.get('years') or []:
+            if not isinstance(year, dict):
+                continue
+            for s in year.get('students') or []:
+                if isinstance(s, dict) and s.get('id') is not None:
+                    students[(str(cls.get('id')), str(year.get('id')), str(s['id']))] = s
+    return students
+
+
+def carry_over_student_fields(user_id: str, incoming: dict, encryption_key: bytes):
+    """Copy PRESERVED_STUDENT_FIELDS from the stored blob into incoming students
+    that lack them. Only decrypts the stored blob when such a student exists."""
+    incomplete = {
+        key: s for key, s in _students_by_key(incoming).items()
+        if any(f not in s for f in PRESERVED_STUDENT_FIELDS)
+    }
+    if not incomplete:
+        return
+    stored = _students_by_key(get_user_data(user_id, encryption_key) or {})
+    for key, s in incomplete.items():
+        old = stored.get(key)
+        if not old:
+            continue
+        for f in PRESERVED_STUDENT_FIELDS:
+            if f not in s and f in old:
+                s[f] = old[f]
 
 def get_user_data_cached(user_id: str, session_token: str, encryption_key: bytes = None):
     """Get user data from cache or decrypt and cache it"""
@@ -2762,6 +2812,8 @@ async def api_save_data():
         # Debug: Log the received data
         print(f"Received data for user {user_id}")
         print(f"Data preview: {len(data.get('classes', []))} classes, {len(data.get('categories', []))} categories")
+
+        carry_over_student_fields(user_id, data, encryption_key)
 
         # Save complete user data to JSON database (encrypted) and update cache
         save_user_data(user_id, data, encryption_key, token)

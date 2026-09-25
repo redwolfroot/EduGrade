@@ -35,6 +35,7 @@ A secure web application for teachers to manage student grades, classes, and per
 - **Customizable Categories** - Define grade categories with custom weights and names
 - **Plus/Minus Grade System** - Configurable percentage-based grading system with plus, neutral, and minus values
 - **Participation Tracking** - Track and record student participation grades
+- **Behavior Log** - Record student behavior per subject with date, time, type (positive/neutral/negative) and a description
 - **Attendance Management** - Track student attendance (present, late, absent) with detailed statistics and history
 - **Automatic Attendance Warnings** - Teachers are automatically warned when students approach or fall below the minimum attendance requirement
 - **Auto-Grading for Attendance** - Optionally assign failing grades to students with critically low attendance

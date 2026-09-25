@@ -47,7 +47,16 @@
  * │       │               │       ├── isPlusMinus: Boolean
  * │       │               │       ├── name: String - Optionaler Name (z.B. "SA1")
  * │       │               │       └── subjectId: String|undefined - Zugehöriges Fach (undefined = kein Fach)
- * │       │               └── participation: Array - Für zukünftige Erweiterung
+ * │       │               ├── participation: Array - Anwesenheitseinträge
+ * │       │               └── behavior: Array - Verhaltensprotokoll
+ * │       │                   └── [Eintrag]
+ * │       │                       ├── id: String
+ * │       │                       ├── subjectId: String|null - Fach, in dem das Verhalten auftrat
+ * │       │                       ├── date: String - YYYY-MM-DD (Ortszeit)
+ * │       │                       ├── time: String - HH:MM (Ortszeit)
+ * │       │                       ├── type: "positive"|"neutral"|"negative"
+ * │       │                       ├── note: String - Beschreibung (Klartext, max. 500 Zeichen)
+ * │       │                       └── createdAt: Number - Erstellzeitpunkt (ms)
  * │       └── currentYearId: String - ID des aktuell ausgewählten Jahrgangs
  * ├── categories: Array - GLOBALE Notenkategorien (gelten für ALLE Klassen und Jahrgänge)
  * │   └── [Kategorie]

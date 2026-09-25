@@ -44,6 +44,10 @@ EduGrade analysiert die Notenentwicklung:
 
 Der Schüler wird mit dem **Klassendurchschnitt** verglichen — so sehen Sie auf einen Blick, ob er über oder unter dem Schnitt liegt.
 
+### Verhaltensprotokoll
+
+Alle Verhaltenseinträge des aktiven Fachs mit Datum, Uhrzeit, Art und Beschreibung. Hier legen Sie auch neue Einträge an — mehr dazu unter [Verhaltensprotokoll](../schueler/verhaltensprotokoll.md).
+
 ## Navigation zwischen Schülern
 
 Nutzen Sie die **Vor/Zurück-Pfeile**, um zum nächsten oder vorherigen Schüler zu wechseln, ohne zur Klassenansicht zurückkehren zu müssen.

@@ -424,7 +424,9 @@ const migrateData = () => {
         appData.attendanceSettings = { enabled: false, minAttendancePercent: 75, warningThreshold: 5 };
     }
 
-    // MIGRATION: Initialize participation array for existing students
+    // MIGRATION: Initialize participation/behavior arrays for existing students.
+    // Always sending `behavior` also tells the server this client knows the field
+    // (see carry_over_student_fields in app.py).
     if (appData.classes) {
         appData.classes.forEach(cls => {
             if (cls.years) {
@@ -433,6 +435,9 @@ const migrateData = () => {
                         year.students.forEach(student => {
                             if (!student.participation) {
                                 student.participation = [];
+                            }
+                            if (!Array.isArray(student.behavior)) {
+                                student.behavior = [];
                             }
                         });
                     }

@@ -13,8 +13,8 @@ title: Fach löschen
 
 ## Was wird gelöscht?
 
-Beim Löschen eines Fachs werden **alle Noten** entfernt, die diesem Fach zugeordnet sind — bei **allen Schülern** des aktuellen Schuljahres.
+Beim Löschen eines Fachs werden **alle Noten** und **alle Einträge im [Verhaltensprotokoll](../schueler/verhaltensprotokoll.md)** entfernt, die diesem Fach zugeordnet sind — bei **allen Schülern** des aktuellen Schuljahres.
 
 :::danger Achtung
-Das Löschen eines Fachs kann **nicht rückgängig** gemacht werden. Alle Noten für dieses Fach gehen unwiderruflich verloren.
+Das Löschen eines Fachs kann **nicht rückgängig** gemacht werden. Alle Noten und Verhaltenseinträge für dieses Fach gehen unwiderruflich verloren.
 :::

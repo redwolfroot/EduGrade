@@ -2762,3 +2762,114 @@ html.dark .recovery-danger-box {
 html.dark .recovery-danger-box p {
     color: oklch(0.9 0.12 20);
 }
+
+/* ========== VERHALTENSPROTOKOLL ========== */
+.behavior-positive { --behavior-color: #16a34a; --behavior-bg: rgba(34, 197, 94, 0.12); }
+.behavior-neutral  { --behavior-color: #64748b; --behavior-bg: rgba(100, 116, 139, 0.14); }
+.behavior-negative { --behavior-color: #dc2626; --behavior-bg: rgba(239, 68, 68, 0.12); }
+html.dark .behavior-positive { --behavior-color: #4ade80; --behavior-bg: rgba(34, 197, 94, 0.16); }
+html.dark .behavior-neutral  { --behavior-color: #cbd5e1; --behavior-bg: rgba(148, 163, 184, 0.16); }
+html.dark .behavior-negative { --behavior-color: #f87171; --behavior-bg: rgba(239, 68, 68, 0.16); }
+
+.behavior-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.behavior-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.125rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--behavior-color);
+    background: var(--behavior-bg);
+}
+.behavior-badge .lucide {
+    width: 0.9rem;
+    height: 0.9rem;
+}
+
+.behavior-list {
+    display: flex;
+    flex-direction: column;
+}
+.behavior-entry {
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--border);
+}
+.behavior-entry:first-child {
+    border-top: 0;
+}
+.behavior-entry-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+.behavior-entry-when {
+    font-size: 0.8rem;
+    color: var(--muted-foreground);
+}
+.behavior-entry-actions {
+    display: flex;
+    gap: 0.25rem;
+    margin-left: auto;
+}
+
+.behavior-note {
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Typ-Auswahl im Dialog: Radio-Buttons als farbige Kacheln */
+.behavior-type-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+.behavior-type-option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.5rem;
+    border: 2px solid var(--border);
+    border-radius: 0.6rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+.behavior-type-option input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+.behavior-type-option:has(input:checked) {
+    border-color: var(--behavior-color);
+    background: var(--behavior-bg);
+    color: var(--behavior-color);
+}
+.behavior-type-option:has(input:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+/* Schmale Dialoge: Icon über dem Text, sonst passt "Negativ" nicht in die Kachel */
+@media (max-width: 480px) {
+    .behavior-type-option {
+        flex-direction: column;
+        gap: 0.15rem;
+        padding: 0.45rem 0.25rem;
+        font-size: 0.8rem;
+    }
+}

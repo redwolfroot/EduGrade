@@ -331,7 +331,8 @@ const webUntisImportKlasse = async (klasseId, klasseName, btn) => {
                 middleName: '',
                 notes: '',
                 grades: [],
-                participation: []
+                participation: [],
+                behavior: []
             });
         });
         saveData(t("toast.webUntisClassImported"));
