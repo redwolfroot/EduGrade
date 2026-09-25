@@ -4,15 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; connect-src 'self';">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="DENY">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Login - EduGrade</title>
     <link rel="icon" href="/static/favicon.ico?v={{ app_version }}" sizes="any">
     <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v={{ app_version }}">
     <link rel="manifest" href="/static/manifest.json?v={{ app_version }}">
     <meta name="theme-color" content="#0B0B0B">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="EduGrade">
@@ -118,7 +116,7 @@
             </section>
             <footer class="flex justify-end gap-2">
                 <button type="button" id="session-conflict-cancel" class="btn-outline" data-i18n="auth.sessionConflictCancel">Cancel</button>
-                <button type="button" id="session-conflict-takeover" class="btn-primary" data-i18n="auth.sessionConflictTakeover">Sign in here</button>
+                <button type="button" id="session-conflict-takeover" class="btn-primary"><svg class="lucide lucide-log-in" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg> <span data-i18n="auth.sessionConflictTakeover">Sign in here</span></button>
             </footer>
         </div>
     </dialog>
@@ -126,7 +124,7 @@
     <!-- Top-right Controls -->
     <div class="fixed top-4 right-4 z-50 flex items-center gap-2">
     <!-- Docs Link Button -->
-    <a href="https://edugrade.avocloud.net/docs" target="_blank" rel="noopener noreferrer"
+    <a href="/docs"
         class="btn-outline h-10 px-3 text-sm font-semibold tracking-wide inline-flex items-center gap-1.5"
         aria-label="Documentation" data-i18n-aria-label="nav.docs">
         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
@@ -194,6 +192,7 @@
                         <nav role="tablist" aria-orientation="horizontal" class="w-full">
                             <button type="button" role="tab" id="tab-login" aria-controls="panel-login" aria-selected="true" tabindex="0" data-i18n="auth.signIn">Sign In</button>
                             <button type="button" role="tab" id="tab-register" aria-controls="panel-register" aria-selected="false" tabindex="0" data-i18n="auth.signUp">Sign Up</button>
+                            <button type="button" role="tab" id="tab-register-org" aria-controls="panel-register-org" aria-selected="false" tabindex="0" data-i18n="auth.signUpOrg">Organisation registrieren</button>
                         </nav>
 
                         <!-- Login Panel -->
@@ -202,12 +201,12 @@
                                 <form id="login-form" class="form grid gap-4">
                                     <div class="grid gap-2">
                                         <label for="login-email" data-i18n="auth.email">Email</label>
-                                        <input type="email" id="login-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder">
+                                        <input type="email" id="login-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder" data-icon="mail">
                                     </div>
 
                                     <div class="grid gap-2">
                                         <label for="login-password" data-i18n="auth.password">Password</label>
-                                        <input type="password" id="login-password" name="password" class="input" required autocomplete="current-password" placeholder="Your password" data-i18n-placeholder="auth.passwordPlaceholder">
+                                        <input type="password" id="login-password" name="password" class="input" required autocomplete="current-password" placeholder="Your password" data-i18n-placeholder="auth.passwordPlaceholder" data-icon="lock">
                                     </div>
 
                                     <button type="submit" class="btn-primary is-cta w-full mt-2" id="login-btn">
@@ -232,23 +231,23 @@
                                 <form id="register-form" class="form grid gap-4">
                                     <div class="grid gap-2">
                                         <label for="register-username" data-i18n="auth.username">Username</label>
-                                        <input type="text" id="register-username" name="username" class="input" required autocomplete="username" placeholder="YourUsername" data-i18n-placeholder="auth.usernamePlaceholder" pattern="[a-zA-Z0-9_]+" minlength="3" maxlength="50">
+                                        <input type="text" id="register-username" name="username" class="input" required autocomplete="username" placeholder="YourUsername" data-i18n-placeholder="auth.usernamePlaceholder" pattern="[a-zA-Z0-9_]+" minlength="3" maxlength="50" data-icon="user">
                                         <p class="text-xs" style="color: var(--muted-foreground);" data-i18n="auth.usernameHint">Letters, numbers and underscores only. 3-50 characters.</p>
                                     </div>
 
                                     <div class="grid gap-2">
                                         <label for="register-email" data-i18n="auth.email">Email</label>
-                                        <input type="email" id="register-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder">
+                                        <input type="email" id="register-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder" data-icon="mail">
                                     </div>
 
                                     <div class="grid gap-2">
                                         <label for="register-password" data-i18n="auth.password">Password</label>
-                                        <input type="password" id="register-password" name="password" class="input" required autocomplete="new-password" placeholder="At least 8 characters" data-i18n-placeholder="auth.passwordHint" minlength="8">
+                                        <input type="password" id="register-password" name="password" class="input" required autocomplete="new-password" placeholder="At least 8 characters" data-i18n-placeholder="auth.passwordHint" minlength="8" data-icon="lock">
                                     </div>
 
                                     <div class="grid gap-2">
                                         <label for="register-password-confirm" data-i18n="auth.confirmPassword">Confirm Password</label>
-                                        <input type="password" id="register-password-confirm" name="password_confirm" class="input" required autocomplete="new-password" placeholder="Repeat your password" data-i18n-placeholder="auth.confirmPasswordPlaceholder" minlength="8">
+                                        <input type="password" id="register-password-confirm" name="password_confirm" class="input" required autocomplete="new-password" placeholder="Repeat your password" data-i18n-placeholder="auth.confirmPasswordPlaceholder" minlength="8" data-icon="lock">
                                     </div>
 
                                     <div class="flex items-start gap-2 mt-2">
@@ -270,6 +269,57 @@
                                 </form>
                             </div>
                         </div>
+
+                        <!-- Register Organisation Panel -->
+                        <div role="tabpanel" id="panel-register-org" aria-labelledby="tab-register-org" tabindex="-1" hidden>
+                            <div class="py-4">
+                                <p class="text-sm mb-4" style="color: var(--muted-foreground);" data-i18n="org.registerOrgHint">Erstelle einen reinen Verwaltungs-Account für deine Schule/Organisation — kein eigenes Klassenbuch, nur Mitgliederverwaltung.</p>
+                                <form id="register-org-form" class="form grid gap-4">
+                                    <div class="grid gap-2">
+                                        <label for="register-org-name" data-i18n="org.orgNameLabel">Name der Organisation</label>
+                                        <input type="text" id="register-org-name" name="org_name" class="input" required maxlength="100" placeholder="z.B. Musterschule" data-i18n-placeholder="org.orgNamePlaceholder" data-icon="building-2">
+                                    </div>
+
+                                    <div class="grid gap-2">
+                                        <label for="register-org-username" data-i18n="auth.username">Username</label>
+                                        <input type="text" id="register-org-username" name="username" class="input" required autocomplete="username" placeholder="YourUsername" data-i18n-placeholder="auth.usernamePlaceholder" pattern="[a-zA-Z0-9_]+" minlength="3" maxlength="50" data-icon="user">
+                                        <p class="text-xs" style="color: var(--muted-foreground);" data-i18n="auth.usernameHint">Letters, numbers and underscores only. 3-50 characters.</p>
+                                    </div>
+
+                                    <div class="grid gap-2">
+                                        <label for="register-org-email" data-i18n="auth.email">Email</label>
+                                        <input type="email" id="register-org-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder" data-icon="mail">
+                                    </div>
+
+                                    <div class="grid gap-2">
+                                        <label for="register-org-password" data-i18n="auth.password">Password</label>
+                                        <input type="password" id="register-org-password" name="password" class="input" required autocomplete="new-password" placeholder="At least 8 characters" data-i18n-placeholder="auth.passwordHint" minlength="8" data-icon="lock">
+                                    </div>
+
+                                    <div class="grid gap-2">
+                                        <label for="register-org-password-confirm" data-i18n="auth.confirmPassword">Confirm Password</label>
+                                        <input type="password" id="register-org-password-confirm" name="password_confirm" class="input" required autocomplete="new-password" placeholder="Repeat your password" data-i18n-placeholder="auth.confirmPasswordPlaceholder" minlength="8" data-icon="lock">
+                                    </div>
+
+                                    <div class="flex items-start gap-2 mt-2">
+                                        <input type="checkbox" id="register-org-terms" name="terms" class="mt-1" required>
+                                        <label for="register-org-terms" class="text-sm" style="color: var(--muted-foreground); overflow-wrap: break-word; word-break: break-word;">
+                                            <span data-i18n="auth.termsAgree">I agree to the</span> <a href="/terms" target="_blank" class="text-blue-400 hover:underline" data-i18n="auth.termsOfService">Terms of Service</a> <span data-i18n="auth.and">and</span> <a href="/privacy" target="_blank" class="text-blue-400 hover:underline" data-i18n="auth.privacyPolicy">Privacy Policy</a>
+                                        </label>
+                                    </div>
+
+                                    <button type="submit" class="btn-primary is-cta w-full mt-2" id="register-org-btn">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                            <circle cx="9" cy="7" r="4"/>
+                                            <line x1="19" y1="8" x2="19" y2="14"/>
+                                            <line x1="22" y1="11" x2="16" y2="11"/>
+                                        </svg>
+                                        <span id="register-org-btn-text" data-i18n="org.createOrganisation">Organisation gründen</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Reset Password Panel (hidden by default) -->
@@ -280,18 +330,18 @@
                             <form id="reset-form" class="form grid gap-4">
                                 <div class="grid gap-2">
                                     <label for="reset-email" data-i18n="auth.email">Email</label>
-                                    <input type="email" id="reset-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder">
+                                    <input type="email" id="reset-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder" data-icon="mail">
                                 </div>
 
                                 <div class="grid gap-2">
                                     <label for="reset-recovery-key" data-i18n="auth.recoveryKey">Recovery Key</label>
-                                    <input type="text" id="reset-recovery-key" name="recovery_key" class="input font-mono" required autocomplete="off" placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" data-i18n-placeholder="auth.recoveryKeyPlaceholder" spellcheck="false">
+                                    <input type="text" id="reset-recovery-key" name="recovery_key" class="input font-mono" required autocomplete="off" placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" data-i18n-placeholder="auth.recoveryKeyPlaceholder" spellcheck="false" data-icon="key-round">
                                     <p class="text-xs" style="color: var(--muted-foreground);" data-i18n="auth.resetRecoveryKeyInfo">Enter the recovery key you saved when you registered. Your data will be preserved.</p>
                                 </div>
 
                                 <div class="grid gap-2">
                                     <label for="reset-new-password" data-i18n="auth.newPassword">New Password</label>
-                                    <input type="password" id="reset-new-password" name="new_password" class="input" required autocomplete="new-password" placeholder="At least 8 characters" data-i18n-placeholder="auth.passwordHint" minlength="8">
+                                    <input type="password" id="reset-new-password" name="new_password" class="input" required autocomplete="new-password" placeholder="At least 8 characters" data-i18n-placeholder="auth.passwordHint" minlength="8" data-icon="lock">
                                 </div>
 
                                 <button type="submit" class="btn-primary is-cta w-full mt-2" id="reset-btn">
@@ -311,13 +361,13 @@
                         <!-- Sub-panel B: Reset via email (no recovery key) -->
                         <div id="reset-subpanel-email" hidden class="py-4">
                             <div class="recovery-warning-box mb-4">
-                                <p class="text-sm font-medium mb-1" data-i18n="auth.emailResetWarningTitle">⚠ Data will be permanently deleted</p>
+                                <p class="text-sm font-medium mb-1 flex items-start gap-2"><svg class="lucide lucide-triangle-alert shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span data-i18n="auth.emailResetWarningTitle">Data will be permanently deleted</span></p>
                                 <p class="text-xs" data-i18n="auth.emailResetWarning">Without a recovery key, your encrypted data cannot be decrypted. Resetting via email will permanently delete all your grades, classes and students.</p>
                             </div>
                             <form id="email-reset-form" class="form grid gap-4">
                                 <div class="grid gap-2">
                                     <label for="email-reset-email" data-i18n="auth.email">Email</label>
-                                    <input type="email" id="email-reset-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder">
+                                    <input type="email" id="email-reset-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder" data-icon="mail">
                                 </div>
 
                                 <button type="submit" class="btn-primary is-cta w-full mt-2" id="email-reset-btn">
@@ -343,13 +393,13 @@
                     <div id="panel-token-reset" hidden>
                         <div class="py-4">
                             <div class="recovery-warning-box mb-4">
-                                <p class="text-sm font-medium mb-1" data-i18n="auth.emailResetWarningTitle">⚠ Data will be permanently deleted</p>
+                                <p class="text-sm font-medium mb-1 flex items-start gap-2"><svg class="lucide lucide-triangle-alert shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span data-i18n="auth.emailResetWarningTitle">Data will be permanently deleted</span></p>
                                 <p class="text-xs" data-i18n="auth.emailResetWarning">Without a recovery key, your encrypted data cannot be decrypted. Resetting via email will permanently delete all your grades, classes and students.</p>
                             </div>
                             <form id="token-reset-form" class="form grid gap-4">
                                 <div class="grid gap-2">
                                     <label for="token-reset-new-password" data-i18n="auth.newPassword">New Password</label>
-                                    <input type="password" id="token-reset-new-password" name="new_password" class="input" required autocomplete="new-password" placeholder="At least 8 characters" data-i18n-placeholder="auth.passwordHint" minlength="8">
+                                    <input type="password" id="token-reset-new-password" name="new_password" class="input" required autocomplete="new-password" placeholder="At least 8 characters" data-i18n-placeholder="auth.passwordHint" minlength="8" data-icon="lock">
                                 </div>
 
                                 <div class="flex items-start gap-2">
@@ -396,6 +446,17 @@
                     <p class="text-xs mb-2" style="color: var(--muted-foreground);" data-i18n="auth.yourRecoveryKey">Your recovery key:</p>
                     <p id="recovery-key-display" class="font-mono text-lg font-bold tracking-widest text-center select-all" style="letter-spacing: 0.1em;"></p>
                 </div>
+                <div id="recovery-key-org-joincode" hidden class="grid gap-2">
+                    <label for="recovery-key-org-joincode-input" data-i18n="org.joinCodeLabel">Join code</label>
+                    <input type="text" id="recovery-key-org-joincode-input" class="input font-mono" readonly data-icon="hash">
+                    <button type="button" id="recovery-key-org-joincode-copy-btn" class="btn-outline w-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                        </svg>
+                        <span data-i18n="org.copyCode">Copy code</span>
+                    </button>
+                </div>
                 <button type="button" id="copy-recovery-key-btn" class="btn-outline w-full">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
@@ -412,7 +473,7 @@
                 </label>
             </section>
             <footer class="flex justify-end">
-                <button type="button" id="recovery-key-continue-btn" class="btn-primary" disabled data-i18n="auth.continueToApp">Continue</button>
+                <button type="button" id="recovery-key-continue-btn" class="btn-primary" disabled><span data-i18n="auth.continueToApp">Continue</span> <svg class="lucide lucide-arrow-right" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
             </footer>
         </div>
     </dialog>
@@ -784,6 +845,8 @@
                         document.getElementById('recovery-key-display').textContent = data.recovery_key;
                         const rkDialog = document.getElementById('recovery-key-dialog');
                         rkDialog.dataset.email = document.getElementById('register-email')?.value || '';
+                        rkDialog.dataset.flow = 'register';
+                        document.getElementById('recovery-key-org-joincode').hidden = true;
                         rkDialog.showModal();
                     } else {
                         showToast(t('auth.accountCreated'), 'success');
@@ -791,6 +854,122 @@
                         document.getElementById('tab-login').click();
                         // Clear register form
                         document.getElementById('register-form').reset();
+                    }
+                } else if (response.status === 429) {
+                    hideProgress();
+                    showRateLimitDialog(data.message ? t(data.message, data.message_params || {}) : null);
+                } else {
+                    hideProgress();
+                    showToast(data.message ? t(data.message) : t('auth.registrationFailed'));
+                }
+
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            } catch (error) {
+                hideProgress();
+                showToast(t('error.somethingWrong'));
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        });
+
+        // Register Organisation form handler — same flow as register-form, but
+        // posts to /api/register-org (which also creates the caller's org) and
+        // additionally surfaces the returned join code in the recovery-key dialog.
+        document.getElementById('register-org-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const password = document.getElementById('register-org-password').value;
+            const passwordConfirm = document.getElementById('register-org-password-confirm').value;
+
+            if (password !== passwordConfirm) {
+                showToast(t('auth.passwordsDontMatch'));
+                return;
+            }
+
+            const termsAccepted = document.getElementById('register-org-terms').checked;
+            if (!termsAccepted) {
+                showToast(t('auth.acceptTerms'));
+                return;
+            }
+
+            const btn = document.getElementById('register-org-btn');
+            const originalHtml = btn.innerHTML;
+            const startTime = Date.now();
+            const MIN_TIME = 2500; // 2.5 seconds minimum
+
+            btn.disabled = true;
+            btn.innerHTML = `${SPINNER_SVG}<span>${t('auth.creatingAccount')}</span>`;
+
+            // Show progress dialog
+            showProgress(t('loading.creatingAccount'), t('loading.creatingAccountSubtitle'));
+            await delay(150);
+
+            try {
+                // Step 1: Validating
+                setProgress(10, t('loading.validatingInfo'));
+                await delay(400);
+
+                // Step 2: Generating user
+                setProgress(25, t('loading.generatingProfile'));
+                await delay(500);
+
+                const response = await fetch('/api/register-org', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        org_name: document.getElementById('register-org-name').value,
+                        username: document.getElementById('register-org-username').value,
+                        email: document.getElementById('register-org-email').value,
+                        password: password,
+                        password_confirm: passwordConfirm
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Step 3: Creating encryption key (longest step)
+                    setProgress(50, t('loading.creatingEncryptionKey'));
+                    await delay(700);
+
+                    // Step 4: Setting up account
+                    setProgress(75, t('loading.settingUpAccount'));
+                    await delay(500);
+
+                    // Step 5: Finalizing
+                    setProgress(90, t('loading.finalizing'));
+                    await delay(300);
+
+                    // Complete
+                    setProgress(100, t('loading.accountCreated'));
+
+                    // Ensure minimum time
+                    const elapsed = Date.now() - startTime;
+                    if (elapsed < MIN_TIME) {
+                        await delay(MIN_TIME - elapsed);
+                    }
+                    await delay(400);
+
+                    hideProgress();
+
+                    // Show recovery key dialog (with join code) before switching to login
+                    if (data.recovery_key) {
+                        document.getElementById('recovery-key-display').textContent = data.recovery_key;
+                        const rkDialog = document.getElementById('recovery-key-dialog');
+                        rkDialog.dataset.email = document.getElementById('register-org-email')?.value || '';
+                        rkDialog.dataset.flow = 'register-org';
+                        document.getElementById('recovery-key-org-joincode').hidden = false;
+                        document.getElementById('recovery-key-org-joincode-input').value = (data.org && data.org.join_code) || '';
+                        rkDialog.showModal();
+                    } else {
+                        showToast(t('auth.accountCreated'), 'success');
+                        // Switch to login tab
+                        document.getElementById('tab-login').click();
+                        // Clear register form
+                        document.getElementById('register-org-form').reset();
                     }
                 } else if (response.status === 429) {
                     hideProgress();
@@ -822,11 +1001,23 @@
             });
         });
 
+        document.getElementById('recovery-key-org-joincode-copy-btn').addEventListener('click', () => {
+            const code = document.getElementById('recovery-key-org-joincode-input').value;
+            navigator.clipboard.writeText(code).then(() => {
+                showToast(t('org.codeCopied'), 'success');
+            });
+        });
+
         document.getElementById('recovery-key-continue-btn').addEventListener('click', () => {
             document.getElementById('recovery-key-dialog').close();
             showToast(t('auth.accountCreated'), 'success');
             document.getElementById('tab-login').click();
-            document.getElementById('register-form').reset();
+            const flow = document.getElementById('recovery-key-dialog').dataset.flow;
+            if (flow === 'register-org') {
+                document.getElementById('register-org-form').reset();
+            } else {
+                document.getElementById('register-form').reset();
+            }
             // Reset checkbox for next time
             document.getElementById('recovery-key-confirm-checkbox').checked = false;
             document.getElementById('recovery-key-continue-btn').disabled = true;

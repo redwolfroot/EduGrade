@@ -52,6 +52,282 @@ html.dark {
 .lucide {
     width: 1.2rem;
     height: 1.2rem;
+    transition: transform 0.15s ease;
+}
+
+/* ========== ICON-HOVER-ANIMATIONEN (Motive von lucide-animated.com,
+   als reines CSS statt React/Motion.js portiert - passend zu unseren
+   Lucide-Icons) ========== */
+
+/* Stift-Icons (rename): kurzes Wackeln der Stiftspitze beim Hover */
+@keyframes iconPenWiggle {
+    0% {
+        transform: rotate(0deg) translate(0, 0);
+    }
+
+    25% {
+        transform: rotate(-4deg) translate(-1px, 1px);
+    }
+
+    50% {
+        transform: rotate(4deg) translate(1px, -1px);
+    }
+
+    75% {
+        transform: rotate(-2deg) translate(0, 0);
+    }
+
+    100% {
+        transform: rotate(0deg) translate(0, 0);
+    }
+}
+
+[class*="btn-"]:hover .lucide-user-pen path:last-of-type,
+[class*="btn-"]:hover .lucide-folder-pen path:last-of-type,
+[class*="btn-"]:hover .lucide-notebook-pen path:last-of-type {
+    animation: iconPenWiggle 0.5s ease-in-out;
+    transform-origin: center;
+}
+
+/* Plus-Icon (Note/Schüler hinzufügen): dreht sich beim Hover einmal um 180° */
+.lucide-plus {
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[class*="btn-"]:hover .lucide-plus {
+    transform: rotate(180deg);
+}
+
+/* Auge-Icon (Details ansehen): "blinzelt" beim Hover */
+@keyframes iconEyeBlink {
+
+    0%,
+    100% {
+        transform: scaleY(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scaleY(0.1);
+        opacity: 0.4;
+    }
+}
+
+@keyframes iconPupilShrink {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(0.3);
+        opacity: 0.4;
+    }
+}
+
+[class*="btn-"]:hover .lucide-eye path {
+    animation: iconEyeBlink 0.4s ease-in-out;
+    transform-origin: center;
+}
+
+[class*="btn-"]:hover .lucide-eye circle {
+    animation: iconPupilShrink 0.4s ease-in-out;
+    transform-origin: center;
+}
+
+/* Papierkorb-Icon (löschen): Deckel hebt+kippt sich kurz beim Hover */
+.lucide-trash path:nth-child(2),
+.lucide-trash path:nth-child(3) {
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: 3px 6px;
+}
+
+[class*="btn-"]:hover .lucide-trash path:nth-child(2),
+[class*="btn-"]:hover .lucide-trash path:nth-child(3) {
+    transform: translateY(-2.5px) rotate(-6deg);
+}
+
+/* Dokument-Icon (Klassenarbeit): Icon skaliert leicht, Textzeilen
+   "schreiben sich neu" (löschen sich und zeichnen sich nach) nacheinander.
+   Braucht pathLength="100" auf den 3 Linien-Pfaden (siehe index.html), damit
+   stroke-dasharray/-dashoffset unabhängig von der tatsächlichen Pfadlänge in
+   0-100 gerechnet werden kann. */
+.lucide-file-text {
+    transition: transform 0.3s ease-out;
+}
+
+[class*="btn-"]:hover .lucide-file-text {
+    transform: scale(1.05);
+}
+
+.lucide-file-text path:nth-child(3),
+.lucide-file-text path:nth-child(4),
+.lucide-file-text path:nth-child(5) {
+    stroke-dasharray: 100;
+    stroke-dashoffset: 0;
+}
+
+@keyframes fileLineRewrite {
+
+    0%,
+    100% {
+        stroke-dashoffset: 0;
+    }
+
+    50% {
+        stroke-dashoffset: 100;
+    }
+}
+
+[class*="btn-"]:hover .lucide-file-text path:nth-child(3) {
+    animation: fileLineRewrite 0.7s ease 0.3s;
+}
+
+[class*="btn-"]:hover .lucide-file-text path:nth-child(4) {
+    animation: fileLineRewrite 0.7s ease 0.5s;
+}
+
+[class*="btn-"]:hover .lucide-file-text path:nth-child(5) {
+    animation: fileLineRewrite 0.7s ease 0.7s;
+}
+
+/* Anwesenheit-Icon (Person mit Häkchen): Häkchen poppt beim Hover */
+@keyframes userCheckPop {
+    0% {
+        transform: scale(0);
+    }
+
+    60% {
+        transform: scale(1.3);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+[class*="btn-"]:hover .lucide-user-round-check path:last-of-type {
+    animation: userCheckPop 0.35s ease-out;
+    transform-origin: center;
+}
+
+/* Upload-Icon (Import): Pfeil hüpft nach oben beim Hover */
+@keyframes uploadBounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+[class*="btn-"]:hover .lucide-upload path:nth-child(1),
+[class*="btn-"]:hover .lucide-upload path:nth-child(2) {
+    animation: uploadBounce 0.4s ease-in-out;
+}
+
+/* Link-Icon (Schüler-Zugang): Kettenglieder ziehen sich kurz auseinander */
+@keyframes linkPullA {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+
+    50% {
+        transform: translate(-1.5px, 1.5px);
+    }
+}
+
+@keyframes linkPullB {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+
+    50% {
+        transform: translate(1.5px, -1.5px);
+    }
+}
+
+[class*="btn-"]:hover .lucide-link path:nth-child(1) {
+    animation: linkPullA 0.4s ease-in-out;
+}
+
+[class*="btn-"]:hover .lucide-link path:nth-child(2) {
+    animation: linkPullB 0.4s ease-in-out;
+}
+
+/* X-Icon (Schließen): beide Linien zeichnen sich nacheinander ein.
+   Braucht pathLength="100" auf den beiden <line>-Elementen. */
+.lucide-x line {
+    stroke-dasharray: 100;
+    stroke-dashoffset: 0;
+}
+
+@keyframes xDraw {
+    from {
+        stroke-dashoffset: 100;
+        opacity: 0;
+    }
+
+    to {
+        stroke-dashoffset: 0;
+        opacity: 1;
+    }
+}
+
+[class*="btn-"]:hover .lucide-x line:nth-child(1) {
+    animation: xDraw 0.3s ease-out both;
+}
+
+[class*="btn-"]:hover .lucide-x line:nth-child(2) {
+    animation: xDraw 0.3s ease-out 0.2s both;
+}
+
+/* Direkter Hover-Fallback: manche Icons sitzen nicht in einem Button
+   (z.B. das Plus-Badge im Empty-State), sondern in einem einfachen <div>.
+   Ein Hover direkt auf dem Icon selbst löst die Animation dann trotzdem aus. */
+.lucide-plus:hover {
+    transform: rotate(180deg);
+}
+
+.lucide-trash:hover path:nth-child(2),
+.lucide-trash:hover path:nth-child(3) {
+    transform: translateY(-2.5px) rotate(-6deg);
+}
+
+.lucide-eye:hover path {
+    animation: iconEyeBlink 0.4s ease-in-out;
+    transform-origin: center;
+}
+
+.lucide-eye:hover circle {
+    animation: iconPupilShrink 0.4s ease-in-out;
+    transform-origin: center;
+}
+
+.lucide-user-pen:hover path:last-of-type,
+.lucide-folder-pen:hover path:last-of-type,
+.lucide-notebook-pen:hover path:last-of-type {
+    animation: iconPenWiggle 0.5s ease-in-out;
+    transform-origin: center;
+}
+
+/* Häkchen-Icon (Erfolgs-Feedback): zeichnet sich beim Erscheinen.
+   Nur stroke-dasharray hier (keine eigene "animation") - der Draw-Effekt
+   wird in iconMorphIn/actionPopupIconPop mitanimiert (unten), weil ein
+   Element pro Property nur EINE animation-Regel gewinnen kann und
+   .icon-swap-in/.action-popup-icon dort ohnehin schon die animation
+   setzen (gleiche Falle wie bei dialog-closing/row-removing weiter oben). */
+.lucide-check {
+    stroke-dasharray: 24;
 }
 
 /* ========== ACCENT COLOR SWATCH PICKER ========== */
@@ -904,6 +1180,292 @@ dialog[open]::backdrop {
 [data-goto-class]:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ========== ANIMATION FOUNDATION (Dialog close, Wizard, Icons, Rows) ========== */
+
+/* Dialog schließen (Gegenstück zu dialogOpen/backdropFadeIn)
+   Braucht "dialog[open]" im Selektor, sonst gewinnt die gleich/höher
+   spezifische dialog[open]-Regel (Zeile ~742) den Cascade-Kampf um die
+   animation-Property und unsere Schließen-Animation greift nie. */
+dialog[open].dialog-closing {
+    animation: dialogClose 0.15s ease-in forwards;
+}
+
+dialog[open].dialog-closing::backdrop {
+    animation: backdropFadeOut 0.15s ease-in forwards;
+}
+
+@keyframes dialogClose {
+    from {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(0.95) translateY(-10px);
+    }
+}
+
+@keyframes backdropFadeOut {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+/* Wizard-Schritt Übergang (edit-dialog Formular-Inhalt) */
+.wizard-step-out {
+    animation: wizardSlideOut 0.12s ease-in forwards;
+}
+
+.wizard-step-in {
+    animation: wizardSlideIn 0.15s ease-out;
+}
+
+@keyframes wizardSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(-16px);
+    }
+}
+
+@keyframes wizardSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Wizard Live-Vorschau (Text-Crossfade statt Icon-Morph) */
+.wizard-preview-update {
+    animation: previewFade 0.15s ease-out;
+}
+
+@keyframes previewFade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Zeile entfernen (vor tatsächlichem Löschen aus den Daten)
+   Braucht die #students-table/#class-list Präfixe, sonst gewinnt die
+   bestehende ID-Regel (Zeile ~813/775) den Cascade-Kampf um die
+   animation-Property und die Animation greift nie. */
+.row-removing,
+#students-table tr.row-removing,
+#class-list>div.row-removing {
+    /* Kein max-height/padding-Collapse: <tr>-Elemente respektieren das
+       unzuverlässig über Browser hinweg - reine Fade+Slide-Animation
+       funktioniert gleich gut für <tr> und <div>-Karten. */
+    animation: rowFadeOut 0.2s ease-in forwards;
+}
+
+@keyframes rowFadeOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(-8px);
+    }
+}
+
+/* Neue Zeile hervorheben (gleiches Spezifitäts-Problem wie oben) */
+.row-added,
+#students-table tr.row-added,
+#class-list>div.row-added {
+    animation: rowHighlightIn 0.9s ease-out;
+}
+
+@keyframes rowHighlightIn {
+    from {
+        background-color: color-mix(in srgb, var(--primary) 15%, transparent);
+    }
+
+    to {
+        background-color: transparent;
+    }
+}
+
+/* Icon-Morph (z.B. Stift -> Häkchen bei erfolgreichem Speichern) */
+.icon-swap-out {
+    animation: iconMorphOut 0.25s ease-in forwards;
+}
+
+.icon-swap-in {
+    animation: iconMorphIn 0.35s ease-out;
+}
+
+@keyframes iconMorphOut {
+    from {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(0.5) rotate(-15deg);
+    }
+}
+
+@keyframes iconMorphIn {
+    from {
+        opacity: 0;
+        transform: scale(0.5) rotate(15deg);
+        stroke-dashoffset: 24; /* no-op unless stroke-dasharray is set, e.g. .lucide-check */
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+        stroke-dashoffset: 0;
+    }
+}
+
+/* Icon-Shake (destruktive Aktion bestätigt, z.B. Löschen-Klick) */
+.icon-shake {
+    animation: iconShake 0.35s ease-in-out;
+}
+
+@keyframes iconShake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    20%,
+    60% {
+        transform: translateX(-2px);
+    }
+
+    40%,
+    80% {
+        transform: translateX(2px);
+    }
+}
+
+/* Button-Press Feedback (delegiert via eventListeners.js) */
+.btn-press {
+    animation: btnPress 0.15s ease-out;
+}
+
+@keyframes btnPress {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(0.92);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Aktions-Erfolgs-Popup (ersetzt Basecoat-Toast) - zentrierte Karte mit
+   animiertem Icon + Label, ersetzt sich selbst bei schnell aufeinander
+   folgenden Aktionen statt zu stapeln. */
+#action-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 10050;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 10rem;
+    padding: 1.5rem 2rem;
+    border-radius: 1rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    text-align: center;
+}
+
+.action-popup-label {
+    color: var(--foreground);
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.action-popup-in {
+    animation: actionPopupIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.action-popup-out {
+    animation: actionPopupOut 0.25s ease-in forwards;
+}
+
+.action-popup-icon {
+    /* Overrides .lucide's 1.2rem default - this icon is the popup's focal point */
+    width: 40px;
+    height: 40px;
+    animation: actionPopupIconPop 0.4s ease-out;
+}
+
+@keyframes actionPopupIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.85);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes actionPopupOut {
+    from {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    to {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+}
+
+@keyframes actionPopupIconPop {
+    0% {
+        transform: scale(0);
+        stroke-dashoffset: 24; /* no-op unless stroke-dasharray is set, e.g. .lucide-check */
+    }
+
+    60% {
+        transform: scale(1.15);
+    }
+
+    100% {
+        transform: scale(1);
+        stroke-dashoffset: 0;
+    }
 }
 
 /* ========== REDUCED MOTION ========== */
@@ -1894,7 +2456,7 @@ main.qsb-open {
     flex-direction: column;
     overflow: hidden;
 }
-#class-exam-overlay.active { display: flex; }
+#class-exam-overlay.active { display: flex; animation: backdropFadeIn 0.2s ease-out; }
 
 /* Mobile: leave room for bottom nav (always visible) */
 @media (max-width: 768px) {

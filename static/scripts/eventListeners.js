@@ -439,6 +439,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Wait for translations to load before rendering UI
     await I18n.ready;
 
+    // Pure org-admin accounts have no personal gradebook — skip the normal
+    // data-loading flow entirely and show the dedicated org-admin dashboard.
+    if (window.currentUser && window.currentUser.account_type === 'org_admin') {
+        document.getElementById("setup-page")?.classList.add("hidden");
+        document.getElementById("dashboard")?.classList.add("hidden");
+        document.getElementById("org-admin-view")?.classList.remove("hidden");
+        I18n.applyI18nToDOM();
+        if (window.renderOrgAdminDashboard) window.renderOrgAdminDashboard();
+        return;
+    }
+
     // Load data from server (async); returns true on success, false on network/server error
     const dataLoaded = await loadData();
 
@@ -604,3 +615,23 @@ const _initBackNavGuard = () => {
         history.pushState({ app: true }, '');
     });
 };
+
+// Universelles Button-Press Feedback (deckt jeden Button jetzt und in Zukunft ab)
+document.addEventListener("pointerdown", (e) => {
+    const btn = e.target.closest(".btn-icon, .btn-primary, .btn-secondary, .btn-outline, .btn-destructive");
+    if (!btn) return;
+    btn.classList.remove("btn-press");
+    void btn.offsetWidth;
+    btn.classList.add("btn-press");
+});
+
+// Icon-Feedback: Löschen-Icon "wackelt" kurz beim Klick, bevor der Bestätigungsdialog öffnet
+document.addEventListener("pointerdown", (e) => {
+    const btn = e.target.closest("[data-delete-student], [data-delete-class]");
+    if (!btn) return;
+    const svg = btn.querySelector("svg");
+    if (!svg) return;
+    svg.classList.remove("icon-shake");
+    void svg.offsetWidth;
+    svg.classList.add("icon-shake");
+});

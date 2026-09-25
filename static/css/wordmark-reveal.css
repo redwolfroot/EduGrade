@@ -1,0 +1,74 @@
+/* ==========================================================================
+   avocloud · CAD construction-reveal wordmark — post-login splash
+   Port of brand/motion/wordmark-reveal.css (the canonical kit) to vanilla
+   CSS/JS; see static/scripts/splash.js. Keep both in sync with the kit —
+   BRANDING.md §5 forbids a second, hand-rolled version of this animation.
+   ========================================================================== */
+
+/* Full-screen canvas. Black, wordmark, nothing else (BRANDING.md §5,
+   "Splash screen"): no spinner, no tagline, no version string. */
+/* Hidden until splash.js decides to play it: no black flash on the reloads
+   that skip the splash, and a JS failure means no splash at all rather than a
+   permanent black screen. */
+#avo-splash {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100001; /* above #edu-boot-loader */
+    align-items: center;
+    justify-content: center;
+    background: #000000;
+    color: #EDEDED; /* locked mark/lockup value on dark, not the #FFFFFF token */
+    transition: opacity 0.7s ease;
+}
+#avo-splash.avo-splash-on { display: flex; }
+#avo-splash.avo-splash-out {
+    opacity: 0;
+    pointer-events: none;
+}
+.avo-splash-word {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.75rem, 7vw, 5.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.015em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    margin: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.hw { position: relative; display: inline-block; }
+.hw-ch { position: relative; display: inline-block; }
+/* `pre` so a space in a multi-word wordmark survives: each character is its
+   own inline-block, and one holding nothing but whitespace collapses. */
+.hw-fill { display: inline-block; position: relative; z-index: 1; white-space: pre; }
+.hw-ch.coral .hw-fill { color: #FF6B4A; }
+
+/* Outline layer — the glyph comes from a pseudo-element so it is NOT counted
+   as page text; the real text lives only in .hw-fill. */
+.hw-stroke {
+    position: absolute; inset: 0; z-index: 2;
+    opacity: 0;
+    -webkit-text-fill-color: transparent;
+    -webkit-text-stroke: 1.2px rgba(255, 255, 255, 0.55);
+    pointer-events: none;
+}
+.hw-stroke::before { content: attr(data-ch); white-space: pre; }
+.hw-ch.coral .hw-stroke { -webkit-text-stroke-color: rgba(255, 107, 74, 0.7); }
+
+/* Construction guides — SVG sized 1:1 to the wordmark box, geometry measured
+   from the real glyphs at runtime. Overflow visible so guides can run past. */
+.hw-guides {
+    position: absolute;
+    top: 0; left: 0;
+    overflow: visible;
+    z-index: 0;
+    pointer-events: none;
+}
+/* dasharray is DrawSVGPlugin's to write. */
+.hw-line { stroke: rgba(255, 255, 255, 0.30); stroke-width: 1; opacity: 0; }
+.hw-line.coral { stroke: rgba(255, 107, 74, 0.5); }
+.hw-circ { fill: none; stroke: rgba(255, 255, 255, 0.26); stroke-width: 1.2; stroke-dasharray: 4 5; opacity: 0; }
+.hw-circ.coral { stroke: rgba(255, 107, 74, 0.55); }

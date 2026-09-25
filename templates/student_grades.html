@@ -4,13 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self';">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="DENY">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Grades - EduGrade</title>
-    <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=1.7.9">
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v={{ app_version }}">
     <meta name="theme-color" content="#0B0B0B">
     <script src="/static/scripts/resource-guard.js?v={{ app_version }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
@@ -18,9 +14,9 @@
     <script src="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.10-beta.2/dist/js/all.min.js" integrity="sha384-4km2iBe4ctopbIOD4zwPsKKoMQsTsYGXAnxBpgIalcQgzegu7w4e+JZMt/BbzScI" crossorigin="anonymous" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" integrity="sha384-Sse/HDqcypGpyTDpvZOJNnG0TT3feGQUkF9H+mnRvic+LjR+K1NhTt8f51KIQ3v3" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" integrity="sha384-cVMg8E3QFwTvGCDuK+ET4PD341jF3W8nO1auiXfuZNQkzbUUiBGLsIQUE+b1mxws" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="/static/css/style.css?v=1.7.9">
-    <script src="/static/scripts/theme.js?v=1.7.9"></script>
-    <script src="/static/scripts/i18n.js?v=1.7.9"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
+    <script src="/static/scripts/theme.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/i18n.js?v={{ app_version }}"></script>
     <style>
         html, body {
             height: 100%;

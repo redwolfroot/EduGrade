@@ -4,7 +4,7 @@
 // "UI" steht für "User Interface" (Benutzeroberfläche).
 
 // ============ LOADING SPINNER SVG ============
-const SPINNER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="status" aria-label="Loading" class="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>`;
+const SPINNER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="status" aria-label="Loading" class="animate-spin lucide lucide-loader-circle-icon lucide-loader-circle"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>`;
 
 /**
  * BUTTON LOADING STATE
@@ -72,7 +72,7 @@ const showLoadingOverlay = (title = t('loading.processing'), description = t('lo
         <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-6 rounded-lg p-6 text-center text-balance md:p-12 text-neutral-800 dark:text-neutral-300">
             <header class="flex max-w-sm flex-col items-center gap-3 text-center">
                 <div class="mb-2 bg-muted text-foreground flex size-10 shrink-0 items-center justify-center rounded-lg [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-6">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="status" aria-label="Loading" class="animate-spin size-4"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="status" aria-label="Loading" class="animate-spin size-4 lucide lucide-loader-circle-icon lucide-loader-circle"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
                 </div>
                 <h3 class="text-lg font-semibold tracking-tight">${title}</h3>
                 <p class="text-gray-400 text-sm/relaxed">${description}</p>
@@ -173,14 +173,62 @@ const createSkeletonTable = (rows = 5, cols = 4) => {
 const recentToasts = new Map();
 const TOAST_DEBOUNCE_MS = 2000;
 
+const ACTION_POPUP_ICONS = {
+    success: '<path d="M20 6 9 17l-5-5"/>',
+    error: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+    info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'
+};
+const ACTION_POPUP_COLORS = {
+    success: '#22c55e',
+    error: '#ef4444',
+    info: '#3b82f6'
+};
+const ACTION_POPUP_ICON_NAMES = {
+    success: 'check',
+    error: 'circle-x',
+    info: 'info'
+};
+
+let _actionPopupTimer = null;
+
+/**
+ * AKTIONS-ERFOLGS-POPUP ANZEIGEN
+ * Ersetzt den früheren Basecoat-Toast: eine minimale, zentrierte Karte mit
+ * animiertem Icon (Häkchen/X/Info) und Label darunter, die kurz erscheint
+ * und wieder verschwindet.
+ * @param {string} message - Die anzuzeigende Nachricht
+ * @param {string} type - "success" | "error" | "info"
+ */
+const showActionPopup = (message, type = "info") => {
+    let popup = document.getElementById("action-popup");
+    if (!popup) {
+        popup = document.createElement("div");
+        popup.id = "action-popup";
+        document.body.appendChild(popup);
+    }
+    clearTimeout(_actionPopupTimer);
+    const iconPath = ACTION_POPUP_ICONS[type] || ACTION_POPUP_ICONS.info;
+    const color = ACTION_POPUP_COLORS[type] || ACTION_POPUP_COLORS.info;
+    const iconName = ACTION_POPUP_ICON_NAMES[type] || ACTION_POPUP_ICON_NAMES.info;
+    popup.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="action-popup-icon lucide lucide-${iconName}-icon lucide-${iconName}">${iconPath}</svg>
+        <span class="action-popup-label">${escapeHtml(message)}</span>
+    `;
+    popup.className = "action-popup"; // reset (also clears in/out from a previous call)
+    void popup.offsetWidth; // force reflow so the entrance animation restarts
+    popup.classList.add("action-popup-in");
+    _actionPopupTimer = setTimeout(() => {
+        popup.classList.remove("action-popup-in");
+        popup.classList.add("action-popup-out");
+        popup.addEventListener("animationend", () => popup.remove(), { once: true });
+    }, 1600);
+};
+
 /**
  * TOAST-BENACHRICHTIGUNG ANZEIGEN
  *
- * Toasts sind kleine Benachrichtigungen die kurz eingeblendet werden
- * und dann automatisch verschwinden (wie ein Toaster der Toast auswirft).
- *
- * Verwendet das Basecoat CSS Framework für das Styling.
- * Das Framework lauscht auf das Custom Event 'basecoat:toast'.
+ * Zeigt eine kurze Erfolgs-/Fehler-/Info-Rückmeldung als animiertes
+ * Check/X/Info-Popup an (siehe showActionPopup).
  *
  * @param {string} message - Die anzuzeigende Nachricht
  * @param {string} type - Typ: "success" (grün), "error" (rot), "info" (blau)
@@ -206,20 +254,7 @@ const showToast = (message, type = "info") => {
     const teacherName = appData?.teacherName || "there";
     const personalizedMessage = message.includes(teacherName) ? message : `${teacherName}, ${message}`;
 
-    // Custom Event auslösen das vom Basecoat Framework abgefangen wird
-    // CustomEvent erlaubt das Senden von eigenen Events mit Daten
-    document.dispatchEvent(new CustomEvent('basecoat:toast', {
-        detail: {
-            config: {
-                category: type,                                    // success/error/info
-                title: type.charAt(0).toUpperCase() + type.slice(1), // "Success", "Error", etc.
-                description: personalizedMessage,                  // Die eigentliche Nachricht
-                cancel: {
-                    label: 'Dismiss'                              // Text für Schließen-Button
-                }
-            }
-        }
-    }));
+    showActionPopup(personalizedMessage, type);
 };
 
 /**
@@ -244,7 +279,7 @@ const showRateLimitDialog = (message = t("error.tooManyRequestsMsg")) => {
                 <header>
                     <div class="flex items-center gap-3">
                         <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-500/15">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500 lucide lucide-circle-alert-icon lucide-circle-alert">
                                 <circle cx="12" cy="12" r="10"/>
                                 <line x1="12" y1="8" x2="12" y2="12"/>
                                 <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -267,7 +302,7 @@ const showRateLimitDialog = (message = t("error.tooManyRequestsMsg")) => {
 
         // Close button handler
         dialog.querySelector('#rate-limit-close').addEventListener('click', () => {
-            dialog.close();
+            closeDialogAnimated(dialog);
         });
     }
 
@@ -317,7 +352,7 @@ const showSessionExpiredDialog = (message = t("error.sessionExpiredMsg")) => {
                     <p class="text-gray-400 text-sm mt-3">${t("error.localDataSaved")}</p>
                 </section>
                 <footer class="flex justify-end">
-                    <button type="button" class="btn-primary" id="session-expired-login">${t("error.logIn")}</button>
+                    <button type="button" class="btn-primary" id="session-expired-login">${lucideIcon('log-in')} ${t("error.logIn")}</button>
                 </footer>
             </div>
         `;
@@ -359,6 +394,49 @@ const showSessionExpiredDialog = (message = t("error.sessionExpiredMsg")) => {
 };
 
 /**
+ * RENAME-ERFOLG ICON-ANIMATION
+ * Morpht das Icon eines Buttons (z.B. Stift) kurz zu einem Häkchen als
+ * visuelles Bestätigungsfeedback, dann zurück zum Original-Icon.
+ * @param {HTMLElement} btn - Button mit dem Icon
+ */
+const flashRenameSuccessIcon = (btn) => {
+    if (!btn) return;
+    const svg = btn.querySelector('svg');
+    if (!svg) return;
+    const originalHtml = svg.outerHTML;
+    const checkSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-icon lucide-check">
+        <path d="M20 6 9 17l-5-5"/>
+    </svg>`;
+    setTimeout(() => {
+        animateOutThenRun(svg, 'icon-swap-out', () => {
+            btn.innerHTML = checkSvg;
+            btn.querySelector('svg')?.classList.add('icon-swap-in');
+            setTimeout(() => {
+                const current = btn.querySelector('svg');
+                current?.classList.remove('icon-swap-in');
+                animateOutThenRun(current, 'icon-swap-out', () => {
+                    btn.innerHTML = originalHtml;
+                    btn.querySelector('svg')?.classList.add('icon-swap-in');
+                }, 320);
+            }, 1300);
+        }, 280);
+    }, 150);
+};
+
+/**
+ * DIALOG ANIMIERT SCHLIESSEN
+ * Spielt die dialogClose-Exit-Animation ab, bevor die native close()
+ * aufgerufen wird (statt dass der Dialog instant verschwindet).
+ * @param {HTMLDialogElement} dialog
+ */
+const closeDialogAnimated = (dialog) => {
+    animateOutThenRun(dialog, 'dialog-closing', () => {
+        dialog.classList.remove('dialog-closing');
+        dialog.close();
+    }, 200);
+};
+
+/**
  * DIALOG ANZEIGEN (Wiederverwendbar)
  *
  * Öffnet ein modales Dialog-Fenster mit benutzerdefiniertem Inhalt.
@@ -396,7 +474,7 @@ const showDialog = (dialogId, title, content, onConfirm = null) => {
         form.removeEventListener("input", markDirty);
         form.removeEventListener("change", markDirty);
         isDirty = false;
-        dialog.close();
+        closeDialogAnimated(dialog);
     };
 
     // Versuche den Dialog zu schließen - mit Warnung falls dirty
@@ -436,7 +514,7 @@ const showDialog = (dialogId, title, content, onConfirm = null) => {
             form.removeEventListener("input", markDirty);
             form.removeEventListener("change", markDirty);
             isDirty = false;
-            dialog.close();
+            closeDialogAnimated(dialog);
         };
     }
 
@@ -533,12 +611,12 @@ const showConfirmDialog = (message, onConfirm, details = null, warning = null, o
     // "Delete"-Button: Führt Aktion aus und schließt Dialog
     confirmBtn.onclick = () => {
         onConfirm();      // Übergebene Funktion ausführen
-        dialog.close();   // Dialog schließen
+        closeDialogAnimated(dialog);   // Dialog schließen
     };
 
     // "Cancel"-Button: Nur Dialog schließen
     cancelBtn.onclick = () => {
-        dialog.close();
+        closeDialogAnimated(dialog);
     };
 };
 
@@ -568,7 +646,7 @@ const showAlertDialog = (message) => {
 
     // "OK"-Button schließt den Dialog
     document.getElementById("close-alert").onclick = () => {
-        dialog.close();
+        closeDialogAnimated(dialog);
     };
 };
 
@@ -597,7 +675,7 @@ const showUnsavedChangesWarning = () => {
                 <header>
                     <div class="flex items-center gap-3">
                         <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-yellow-500/15">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-500 lucide lucide-triangle-alert-icon lucide-triangle-alert">
                                 <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
                                 <path d="M12 9v4"/>
                                 <path d="M12 17h.01"/>
@@ -612,25 +690,25 @@ const showUnsavedChangesWarning = () => {
                     <p class="text-gray-400">${t('dialog.unsavedMessage')}</p>
                 </section>
                 <footer class="flex justify-end gap-2">
-                    <button type="button" class="btn-outline" id="unsaved-back-btn">${t('dialog.unsavedBack')}</button>
-                    <button type="button" class="btn-destructive" id="unsaved-discard-btn">${t('dialog.unsavedDiscard')}</button>
+                    <button type="button" class="btn-outline" id="unsaved-back-btn">${lucideIcon('arrow-left')} ${t('dialog.unsavedBack')}</button>
+                    <button type="button" class="btn-destructive" id="unsaved-discard-btn">${lucideIcon('trash')} ${t('dialog.unsavedDiscard')}</button>
                 </footer>
             </div>
         `;
 
         warningDialog.addEventListener('cancel', (e) => {
             e.preventDefault();
-            warningDialog.close();
+            closeDialogAnimated(warningDialog);
             resolve(false);
         }, { once: true });
 
         warningDialog.querySelector('#unsaved-back-btn').addEventListener('click', () => {
-            warningDialog.close();
+            closeDialogAnimated(warningDialog);
             resolve(false);
         }, { once: true });
 
         warningDialog.querySelector('#unsaved-discard-btn').addEventListener('click', () => {
-            warningDialog.close();
+            closeDialogAnimated(warningDialog);
             resolve(true);
         }, { once: true });
 
@@ -708,7 +786,7 @@ const createEmptyState = (icon, title, description, buttons = [], learnMoreLink 
     const learnMoreHtml = learnMoreLink ? `
         <a href="${learnMoreLink}" class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive underline-offset-4 hover:underline h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 text-gray-400">
             ${t('emptyState.learnMore') || 'Learn More'}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10" /><path d="M7 17 17 7" /></svg>
+            <svg class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10" /><path d="M7 17 17 7" /></svg>
         </a>
     ` : '';
 
@@ -752,7 +830,7 @@ const showUndoNotification = (message, undoCallback, durationMs = 5000) => {
     if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
 
     textEl.textContent = message;
-    undoBtn.textContent = (typeof t === 'function' ? t('toast.undo') : null) || 'Undo';
+    undoBtn.innerHTML = `${lucideIcon('undo-2')} ${escapeHtml((typeof t === 'function' ? t('toast.undo') : null) || 'Undo')}`;
     bar.classList.remove('hidden');
     bar.style.animation = 'none';
     bar.offsetHeight; // force reflow
@@ -791,8 +869,8 @@ const showUndoNotification = (message, undoCallback, durationMs = 5000) => {
  *   document.querySelectorAll('.swipe-row').forEach(attachSwipe);
  */
 const SWIPE_ICONS = {
-    edit:   `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
-    trash:  `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>`
+    edit:   `<svg class="lucide lucide-pen-line-icon lucide-pen-line" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
+    trash:  `<svg class="lucide lucide-trash-icon lucide-trash" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>`
 };
 
 const swipeRowHtml = ({ contentHtml, leftAction, rightAction, contentAttr = '' }) => {

@@ -108,8 +108,9 @@ const addClass = (name) => {
  * @param {string} classId - ID der Klasse
  * @param {string} name - Name des Jahrgangs (z.B. "2024/2025")
  * @param {string|null} copyFromYearId - Optional: ID des Jahrgangs von dem kopiert werden soll
+ * @param {Array<string>|null} keepStudentIds - Optional: nur diese Schüler-IDs aus dem Quelljahr übernehmen (null = alle)
  */
-const addYear = (classId, name, copyFromYearId = null, dates = null) => {
+const addYear = (classId, name, copyFromYearId = null, dates = null, keepStudentIds = null) => {
     const validation = validateStringInput(name, 50);
     if (!validation.isValid) {
         showAlertDialog(validation.error);
@@ -149,8 +150,11 @@ const addYear = (classId, name, copyFromYearId = null, dates = null) => {
                 attendanceAutoGrading: subj.attendanceAutoGrading ?? null
             }));
 
-            // Copy students (with new IDs, but NO grades)
-            newYear.students = sourceYear.students.map(student => ({
+            // Copy students (with new IDs, but NO grades) - only the ones in keepStudentIds, or all if not given
+            const studentsToCopy = keepStudentIds
+                ? sourceYear.students.filter(s => keepStudentIds.includes(s.id))
+                : sourceYear.students;
+            newYear.students = studentsToCopy.map(student => ({
                 id: Date.now().toString() + '-stu-' + Math.floor(Math.random() * 10000),
                 firstName: student.firstName,
                 lastName: student.lastName,
@@ -308,6 +312,9 @@ const addStudent = (firstName, lastName, middleName) => {
     currentYear.students.push(newStudent);
     saveData(t("toast.studentAdded"));
     renderStudents();
+    requestAnimationFrame(() => {
+        document.querySelector(`tr[data-open-qsb="${newStudent.id}"]`)?.classList.add('row-added');
+    });
 };
 
 /**
@@ -526,7 +533,9 @@ const editClass = (classId, newName, attendanceEnabled = undefined) => {
         if (classId === appData.currentClassId) {
             document.getElementById("current-class-name").textContent = validation.value;
         }
+        return true;
     }
+    return false;
 };
 
 /**
@@ -899,6 +908,7 @@ const editSubject = (classId, subjectId, newName, minAttendancePercent = null, w
         saveData(t("toast.subjectRenamed"), "success");
         renderSubjectTabs();
         renderStudents();
+        flashRenameSuccessIcon(document.querySelector(`[data-edit-subject="${subjectId}"]`));
     }
 };
 
@@ -954,7 +964,7 @@ const openStudentAccessDialog = async () => {
     const content = document.getElementById('student-access-content');
 
     // Show loading
-    content.innerHTML = '<div class="flex items-center justify-center p-8"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg></div>';
+    content.innerHTML = '<div class="flex items-center justify-center p-8"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin lucide lucide-loader-circle-icon lucide-loader-circle"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg></div>';
     dialog.showModal();
 
     try {
@@ -1013,7 +1023,7 @@ const renderCreateShare = (container, currentClass) => {
 
             <div class="grid gap-2">
                 <label class="text-sm font-medium">${t("share.validityPeriod")}</label>
-                <select id="share-expires" class="select w-full">
+                <select id="share-expires" class="select w-full" data-icon="clock">
                     <option value="24">${t("share.1day")}</option>
                     <option value="72">${t("share.3days")}</option>
                     <option value="168" selected>${t("share.1week")}</option>
@@ -1049,7 +1059,7 @@ const renderCreateShare = (container, currentClass) => {
             </div>
 
             <button id="create-share-btn" class="btn-primary w-full">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="lucide lucide-link-icon lucide-link" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                 </svg>
@@ -1166,7 +1176,7 @@ const renderPinListView = (container, token, pins, currentClass) => {
                             <td><code class="text-lg tracking-widest font-mono">${escapeHtml(p.pin)}</code></td>
                             <td>
                                 <button class="btn-sm-icon-outline copy-pin-btn" data-pin="${safeAttr(p.pin)}" data-tooltip="${t("share.copyPin")}" data-side="left">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <svg class="lucide lucide-copy-icon lucide-copy" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
                                     </svg>
                                 </button>
@@ -1190,7 +1200,7 @@ const renderPinListView = (container, token, pins, currentClass) => {
                 <div class="flex gap-2">
                     <input type="text" class="input flex-1 text-sm" value="${safeAttr(shareUrl)}" readonly id="share-url-input">
                     <button class="btn-outline" id="copy-share-url" data-tooltip="${t("share.copyLink")}" data-side="top">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg class="lucide lucide-copy-icon lucide-copy" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
                         </svg>
                     </button>
@@ -1202,7 +1212,7 @@ const renderPinListView = (container, token, pins, currentClass) => {
                 <label class="text-sm font-medium mb-2">${t("share.qrCode")}</label>
                 <div id="qr-code-container" class="flex items-center justify-center p-4 bg-white border rounded-lg">
                     <div id="qr-code-placeholder" class="text-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin mx-auto mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin mx-auto mb-2 lucide lucide-loader-circle-icon lucide-loader-circle">
                             <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                         </svg>
                         <p class="text-sm">${t("share.generatingQR")}</p>
@@ -1215,7 +1225,7 @@ const renderPinListView = (container, token, pins, currentClass) => {
             <div>
                 <div class="flex items-center justify-between mb-2">
                     <label class="text-sm font-medium">${t("share.studentPins")}</label>
-                    ${pins.length > 0 ? `<button class="btn-sm-outline" id="copy-all-pins">${t("share.copyAll")}</button>` : ''}
+                    ${pins.length > 0 ? `<button class="btn-sm-outline" id="copy-all-pins">${lucideIcon('copy')} ${t("share.copyAll")}</button>` : ''}
                 </div>
                 <div class="overflow-x-auto border rounded-lg">
                     ${tableContent}
@@ -1350,7 +1360,7 @@ const renderActiveShare = (container, shareData, currentClass) => {
                         <span class="text-sm">${escapeHtml(subject.name)}</span>
                     </label>
                 `).join('')}
-                <button id="save-subjects-btn" class="btn-sm-primary mt-2">${t("share.saveSubjects")}</button>
+                <button id="save-subjects-btn" class="btn-sm-primary mt-2">${lucideIcon('save')} ${t("share.saveSubjects")}</button>
             </div>
         `;
     } else {
@@ -1379,7 +1389,7 @@ const renderActiveShare = (container, shareData, currentClass) => {
                 <div class="flex gap-2">
                     <input type="text" class="input flex-1 text-sm" value="${safeAttr(shareUrl)}" readonly id="share-url-input">
                     <button class="btn-outline" id="copy-share-url">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg class="lucide lucide-copy-icon lucide-copy" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
                         </svg>
                     </button>
@@ -1391,7 +1401,7 @@ const renderActiveShare = (container, shareData, currentClass) => {
                 <label class="text-sm font-medium mb-2">${t("share.qrCode")}</label>
                 <div id="qr-code-container" class="flex items-center justify-center p-4 bg-white border rounded-lg">
                     <div id="qr-code-placeholder" class="text-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin mx-auto mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin mx-auto mb-2 lucide lucide-loader-circle-icon lucide-loader-circle">
                             <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                         </svg>
                         <p class="text-sm">${t("share.generatingQR")}</p>
@@ -1425,20 +1435,20 @@ const renderActiveShare = (container, shareData, currentClass) => {
                     <input type="checkbox" id="vis-chart" class="checkbox" ${vis.chart ? 'checked' : ''}>
                     <span class="text-sm">${t("share.gradeChart")}</span>
                 </label>
-                <button id="save-visibility-btn" class="btn-sm-primary mt-2">${t("share.saveVisibility")}</button>
+                <button id="save-visibility-btn" class="btn-sm-primary mt-2">${lucideIcon('save')} ${t("share.saveVisibility")}</button>
             </div>
 
             <hr>
 
             <div role="group" class="button-group">
                 <button id="regenerate-pins-btn" class="btn-outline flex-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg class="lucide lucide-refresh-ccw-icon lucide-refresh-ccw" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>
                     </svg>
                     ${t("share.newPins")}
                 </button>
                 <button id="revoke-share-btn" class="btn-destructive flex-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
                     </svg>
                     ${t("share.revokeAccess")}
@@ -1486,7 +1496,7 @@ const renderActiveShare = (container, shareData, currentClass) => {
         }
 
         btn.disabled = false;
-        btn.textContent = t("share.saveVisibility");
+        btn.innerHTML = `${lucideIcon('save')} ${t("share.saveVisibility")}`;
     });
 
     // Save subjects
@@ -1530,7 +1540,7 @@ const renderActiveShare = (container, shareData, currentClass) => {
             }
 
             btn.disabled = false;
-            btn.textContent = t("share.saveSubjects");
+            btn.innerHTML = `${lucideIcon('save')} ${t("share.saveSubjects")}`;
         });
     }
 
@@ -1720,7 +1730,7 @@ function openEditAttendanceDialog(studentId, attendanceId) {
       </div>
       <div class="grid gap-2">
         <label for="edit-attendance-status" class="text-sm font-medium">${t('attendance.status')}</label>
-        <select id="edit-attendance-status" name="edit-attendance-status" class="select" required>
+        <select id="edit-attendance-status" name="edit-attendance-status" class="select" required data-icon="list-checks">
           <option value="present" ${entry.status === 'present' ? 'selected' : ''}>${t('attendance.present')}</option>
           <option value="late" ${entry.status === 'late' ? 'selected' : ''}>${t('attendance.late')}</option>
           <option value="absent" ${entry.status === 'absent' ? 'selected' : ''}>${t('attendance.absent')}</option>

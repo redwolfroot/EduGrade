@@ -147,7 +147,7 @@
 
             errorEl.classList.add('hidden');
             btn.disabled = true;
-            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> ${t("studentView.loading")}`;
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin lucide lucide-loader-circle-icon lucide-loader-circle"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> ${t("studentView.loading")}`;
 
             try {
                 const response = await fetch(`/api/grades/${window.shareToken}/verify`, {

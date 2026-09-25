@@ -4,9 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; connect-src 'self' https://cdn.jsdelivr.net;">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>EduGrade</title>
     <link rel="icon" href="/static/favicon.ico?v={{ app_version }}" sizes="any">
@@ -15,6 +12,7 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/static/icons/icon-512.png?v={{ app_version }}">
     <link rel="manifest" href="/static/manifest.json?v={{ app_version }}">
     <meta name="theme-color" content="#0B0B0B">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -44,88 +42,9 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
     <link rel="stylesheet" href="/static/css/avocloud-branding.css?v={{ app_version }}">
     <link rel="stylesheet" href="/static/css/mobile.css?v={{ app_version }}">
+    <link rel="stylesheet" href="/static/css/wordmark-reveal.css?v={{ app_version }}">
     <script src="/static/scripts/theme.js?v={{ app_version }}"></script>
     <style>
-        #avo-intro-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-            background: oklch(0.09 0.015 280);
-            transition: opacity 0.7s ease;
-            color: #e8e4db;
-        }
-        .avo-tagline {
-            font-family: 'Syne', sans-serif;
-            font-weight: 700;
-            font-size: clamp(0.65rem, 2vw, 0.85rem);
-            letter-spacing: 0.25em;
-            text-transform: uppercase;
-            opacity: 0;
-            transform: translateY(6px);
-            transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.77,0,.18,1);
-        }
-        #avo-intro-overlay.avo-fade-out {
-            opacity: 0;
-            pointer-events: none;
-        }
-        .avo-intro {
-            display: inline-flex;
-            align-items: center;
-        }
-        .avo-icon-slot {
-            display: inline-grid;
-            flex-shrink: 0;
-        }
-        .avo-icon-slot > * {
-            grid-area: 1/1;
-            display: flex;
-            align-items: center;
-        }
-        .avo-icon svg {
-            height: clamp(1.5rem, 7vw, 5rem);
-            width: auto;
-        }
-        .avo-path {
-            stroke-dasharray: 200;
-            stroke-dashoffset: 200;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-        }
-        .avo-av,
-        .avo-text {
-            font-family: 'Syne', sans-serif;
-            font-weight: 800;
-            font-size: clamp(1.5rem, 7vw, 5rem);
-            letter-spacing: .04em;
-            white-space: nowrap;
-        }
-        .avo-av {
-            opacity: 0;
-            transform: translateX(6px);
-            transition: opacity .6s ease, transform .6s cubic-bezier(.77,0,.18,1);
-        }
-        .avo-text-wrap {
-            overflow: hidden;
-            max-width: 0;
-            display: flex;
-            align-items: baseline;
-            transition: max-width .7s cubic-bezier(.77,0,.18,1);
-        }
-        .avo-text {
-            opacity: 0;
-            transform: translateX(20px);
-            transition: transform .7s cubic-bezier(.77,0,.18,1), opacity .5s ease .05s;
-        }
-        .avo-dot { opacity: .55; }
-        .avo-icon {
-            transition: opacity .6s ease, transform .6s cubic-bezier(.77,0,.18,1);
-        }
-
         /* Collapsible sections */
         .collapsible-content {
             overflow: hidden;
@@ -161,18 +80,24 @@
             align-items: center;
             justify-content: center;
             gap: 1.25rem;
-            background: #0B0B0B;
+            background: #000000;
             color: #EDEDED;
             font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             transition: opacity 0.4s ease;
         }
+        /* avocloud loader (BRANDING.md §9): 12 coral ticks on a 3px ring,
+           marching. Inline because this renders before any external CSS. */
         #edu-boot-loader .edu-boot-spinner {
             width: 42px;
             height: 42px;
-            border: 3px solid rgba(237, 237, 237, 0.18);
-            border-top-color: #FF6B4A;
             border-radius: 50%;
-            animation: edu-boot-spin 0.9s linear infinite;
+            background: repeating-conic-gradient(#FF6B4A 0 15deg, transparent 15deg 30deg);
+            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            animation: edu-boot-spin 1.2s linear infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #edu-boot-loader .edu-boot-spinner { animation: none; }
         }
         #edu-boot-loader .edu-boot-title {
             font-family: 'Syne', sans-serif;
@@ -221,23 +146,10 @@
         });
     </script>
 
-    <!-- Intro animation overlay (plays once per session after login) -->
-    <div id="avo-intro-overlay">
-        <span class="avo-tagline">Developed by</span>
-        <div class="avo-intro">
-            <span class="avo-icon-slot">
-                <span class="avo-icon">
-                    <svg viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="5.5">
-                        <path class="avo-path" d="M22 18 L12 18 L12 54 L22 54 M50 18 L60 18 L60 54 L50 54 M26 30 L33 36 L26 42" pathLength="200"/>
-                        <rect x="40" y="28" width="4" height="16" rx="2" fill="#FF6B4A" stroke="none"/>
-                    </svg>
-                </span>
-                <span class="avo-av">AV</span>
-            </span>
-            <span class="avo-text-wrap">
-                <span class="avo-text">OCLOUD<span class="avo-dot">.NET</span></span>
-            </span>
-        </div>
+    <!-- Post-login splash: CAD construction reveal (BRANDING.md §5).
+         Content is built by splash.js; the element only holds the canvas so
+         there is no flash before the script runs. -->
+    <div id="avo-splash"></div>
     </div>
 
     <!-- Store current user info and app version -->
@@ -245,7 +157,8 @@
         window.currentUser = {
             id: '{{ user.id }}',
             username: "{{ user.username }}",
-            email: "{{ user.email }}"
+            email: "{{ user.email }}",
+            account_type: "{{ user.account_type }}"
         };
         window.appVersion = '{{ app_version }}';
         window.appBuildDate = '{{ build_date }}';
@@ -268,10 +181,10 @@
                 </svg>
                 <span class="text-base font-semibold tracking-tight">EduGrade</span>
             </a>
-            <a href="https://edugrade.avocloud.net/docs" target="_blank" rel="noopener noreferrer"
+            <a href="/docs"
                class="btn-outline btn-small inline-flex items-center gap-1.5"
                aria-label="Documentation" data-i18n-aria-label="nav.docs">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="lucide lucide-book-icon lucide-book" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
                 </svg>
@@ -304,7 +217,7 @@
                             </div>
                             <div class="grid gap-2">
                                 <label for="class-name" data-i18n="setup.className">Class name (e.g., "1A")</label>
-                                <input type="text" id="class-name" class="input" value="1A">
+                                <input type="text" id="class-name" class="input" value="1A" data-icon="users">
                                 <p class="text-gray-400 text-sm" data-i18n="setup.classHint">Create
                                     your first class. You can
                                     always add more or make changes later.</p>
@@ -314,7 +227,7 @@
                                 <div class="flex gap-2">
                                     <button type="button" id="setup-theme-light"
                                         class="btn-outline flex-1 flex items-center justify-center gap-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                        <svg class="lucide lucide-sun-icon lucide-sun" xmlns="http://www.w3.org/2000/svg" width="20" height="20"
                                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                             stroke-linecap="round" stroke-linejoin="round">
                                             <circle cx="12" cy="12" r="4" />
@@ -331,7 +244,7 @@
                                     </button>
                                     <button type="button" id="setup-theme-dark"
                                         class="btn-outline flex-1 flex items-center justify-center gap-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                        <svg class="lucide lucide-moon-icon lucide-moon" xmlns="http://www.w3.org/2000/svg" width="20" height="20"
                                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                             stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
@@ -361,10 +274,8 @@
                                 <label data-i18n="setup.defaultSubjects">Default Subjects</label>
                                 <div class="flex gap-2">
                                     <input type="text" id="setup-subject-input" class="input flex-1"
-                                        data-i18n-placeholder="setup.subjectPlaceholder" placeholder="Subject name (e.g. Mathematics)">
-                                    <button type="button" id="setup-add-subject-btn" class="btn-primary">
-                                        <span data-i18n="setup.addSubject">Add Subject</span>
-                                    </button>
+                                        data-i18n-placeholder="setup.subjectPlaceholder" placeholder="Subject name (e.g. Mathematics)" data-icon="book-open">
+                                    <button type="button" id="setup-add-subject-btn" class="btn-primary"><svg class="lucide lucide-plus" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span data-i18n="setup.addSubject">Add Subject</span></button>
                                 </div>
                                 <div id="setup-subjects-list" class="grid gap-1"></div>
                                 <p class="text-gray-400 text-sm" data-i18n="setup.defaultSubjectsHint">
@@ -373,8 +284,8 @@
                     </section>
                     <footer class="flex justify-end gap-2">
                         <button type="button" class="btn-outline" id="import-setup"
-                            data-i18n="setup.import">Import</button>
-                        <button type="submit" class="btn-primary is-cta" data-i18n="setup.letsGo">Let's go</button>
+                           ><svg class="lucide lucide-upload" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg> <span data-i18n="setup.import">Import</span></button>
+                        <button type="submit" class="btn-primary is-cta"><span data-i18n="setup.letsGo">Let's go</span> <svg class="lucide lucide-arrow-right" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
                     </footer>
                     </form>
                 </div>
@@ -399,7 +310,7 @@
                     <button type="button" class="btn-outline" id="cancel-import"
                         data-i18n="dialog.cancel">Cancel</button>
                     <button type="button" class="btn-primary" id="confirm-import"
-                        data-i18n="import.import">Import</button>
+                       ><svg class="lucide lucide-upload" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg> <span data-i18n="import.import">Import</span></button>
                 </footer>
             </div>
         </dialog>
@@ -412,7 +323,7 @@
                 <section class="flex gap-3 items-start">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                        class="text-yellow-500 flex-shrink-0 mt-0.5">
+                        class="text-yellow-500 flex-shrink-0 mt-0.5 lucide lucide-triangle-alert-icon lucide-triangle-alert">
                         <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
                         <path d="M12 9v4" />
                         <path d="M12 17h.01" />
@@ -424,6 +335,16 @@
                 </footer>
             </div>
         </dialog>
+        <!-- Organisation Admin Dashboard (pure org-admin accounts only, no gradebook) -->
+        <div id="org-admin-view" class="hidden">
+            <div class="max-w-2xl mx-auto py-10 px-4 space-y-6">
+                <header class="flex items-center justify-between">
+                    <h1 class="text-2xl font-bold" data-i18n="org.adminDashboardTitle">Organisation verwalten</h1>
+                    <button type="button" id="org-admin-logout-btn" class="btn-outline"><svg class="lucide lucide-log-out" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg> <span data-i18n="nav.logout">Abmelden</span></button>
+                </header>
+                <div id="org-admin-content"></div>
+            </div>
+        </div>
         <!-- Main Dashboard -->
         <div id="dashboard" class="hidden">
             <aside class="sidebar" data-side="left" aria-hidden="false">
@@ -434,7 +355,7 @@
                             <ul class="w-full">
                                 <li class="w-full">
                                     <button id="nav-home" class="btn-block btn-primary mb-2 w-full">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                        <svg class="lucide lucide-house-icon lucide-house" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
                                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                             stroke-linecap="round" stroke-linejoin="round">
                                             <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -450,7 +371,7 @@
                             <ul class="w-full">
                                 <li class="w-full">
                                     <button id="add-class" class="btn-block btn-secondary mb-2 w-full">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                        <svg class="lucide lucide-square-terminal-icon lucide-square-terminal" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
                                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                             stroke-linecap="round" stroke-linejoin="round">
                                             <path d="m7 11 2-2-2-2" />
@@ -461,7 +382,7 @@
                                     </button>
                                 </li>
                                 <li class="w-full mb-1">
-                                    <input type="search" id="sidebar-search" class="input w-full" style="font-size:0.85rem;" data-i18n-placeholder="search.placeholder">
+                                    <input type="search" id="sidebar-search" class="input w-full" style="font-size:0.85rem;" data-i18n-placeholder="search.placeholder" data-icon="search">
                                 </li>
                                 <li class="w-full">
                                     <div id="class-list" class="space-y-1 w-full"></div>
@@ -483,14 +404,14 @@
                                     class="btn-outline w-full" style="justify-content: flex-start; gap: 0.75rem; padding: 0.5rem 0.75rem; height: auto;">
                                     <div id="profile-avatar" style="min-width: 2.25rem; width: 2.25rem; height: 2.25rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 800; color: white; letter-spacing: 0.04em; flex-shrink: 0; font-family: 'Syne', sans-serif; overflow: hidden;"></div>
                                     <span id="profile-display-name" class="truncate" style="flex: 1; text-align: left; font-size: 0.9375rem;"></span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-left: auto; opacity: 0.5;">
+                                    <svg class="lucide lucide-chevron-up-icon lucide-chevron-up" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-left: auto; opacity: 0.5;">
                                         <path d="m18 15-6-6-6 6"/>
                                     </svg>
                                 </button>
                                 <div id="profile-popover-content" data-popover data-side="top" aria-hidden="true" style="min-width: 100%;">
                                     <div class="grid gap-1 p-1">
                                         <button id="export-data" class="btn-ghost w-full" style="justify-content: flex-start;">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16">
+                                            <svg class="lucide lucide-download-icon lucide-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5" />
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15V3" />
@@ -498,14 +419,14 @@
                                             <span data-i18n="nav.export">Export</span>
                                         </button>
                                         <button id="nav-settings" class="btn-ghost w-full" style="justify-content: flex-start;">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <svg class="lucide lucide-settings-icon lucide-settings" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
                                                 <circle cx="12" cy="12" r="3" />
                                             </svg>
                                             <span data-i18n="nav.settings">Grading</span>
                                         </button>
                                         <button id="profile-btn" class="btn-ghost w-full" style="justify-content: flex-start;">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <svg class="lucide lucide-user-icon lucide-user" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
                                                 <circle cx="12" cy="7" r="4" />
                                             </svg>
@@ -513,14 +434,14 @@
                                         </button>
                                         <hr style="border-color: var(--border); margin: 0.125rem 0;" />
                                         <a href="/about.html" class="btn-ghost w-full" style="justify-content: flex-start;">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16">
+                                            <svg class="lucide lucide-info-icon lucide-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16">
                                                 <circle cx="12" cy="12" r="10" stroke-width="2" />
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-4M12 8h.01" />
                                             </svg>
                                             <span data-i18n="nav.about">About</span>
                                         </a>
-                                        <a href="https://edugrade.avocloud.net/docs" target="_blank" rel="noopener noreferrer" class="btn-ghost w-full" style="justify-content: flex-start;">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                                        <a href="/docs" class="btn-ghost w-full" style="justify-content: flex-start;">
+                                            <svg class="lucide lucide-book-icon lucide-book" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
                                                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                                                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                                             </svg>
@@ -528,14 +449,24 @@
                                         </a>
                                         <button type="button" class="btn-ghost w-full" style="justify-content: flex-start;"
                                             onclick="document.dispatchEvent(new CustomEvent('basecoat:theme'))">
-                                            <svg class="hidden dark:block" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-                                            <svg class="block dark:hidden" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                                            <svg class="hidden dark:block lucide lucide-sun-icon lucide-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                                            <svg class="block dark:hidden lucide lucide-moon-icon lucide-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
                                             <span class="hidden dark:inline" data-i18n="nav.lightMode">Light Mode</span>
                                             <span class="inline dark:hidden" data-i18n="nav.darkMode">Dark Mode</span>
                                         </button>
+                                        <button type="button" id="support-btn" class="btn-ghost w-full" style="justify-content: flex-start;"
+                                            onclick="openSupportDialog()">
+                                            <svg class="lucide lucide-coffee-icon lucide-coffee" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M10 2v2" />
+                                                <path d="M14 2v2" />
+                                                <path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1" />
+                                                <path d="M6 2v2" />
+                                            </svg>
+                                            <span data-i18n="nav.support">Support us</span>
+                                        </button>
                                         <hr style="border-color: var(--border); margin: 0.125rem 0;" />
                                         <button id="logout-btn" class="btn-ghost w-full" style="justify-content: flex-start; color: var(--destructive);">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <svg class="lucide lucide-log-out-icon lucide-log-out" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                                                 <polyline points="16 17 21 12 16 7" />
                                                 <line x1="21" y1="12" x2="9" y2="12" />
@@ -556,7 +487,7 @@
                         <button type="button" onclick="document.dispatchEvent(new CustomEvent('basecoat:sidebar'));"
                             class="btn-outline" data-tooltip="Toggle sidebar" data-i18n-tooltip="nav.toggleSidebar"
                             data-side="right">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-menu-icon lucide-menu" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M3 6h18" />
@@ -572,13 +503,13 @@
                     </div>
                     <div class="flex items-center gap-2">
                     <div id="save-indicator" class="hidden items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border" style="background:rgba(59,130,246,0.1);color:#1d4ed8;border-color:rgba(59,130,246,0.3);">
-                        <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <svg class="animate-spin lucide lucide-loader-circle-icon lucide-loader-circle" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                         </svg>
                         <span id="save-indicator-text">Speichern…</span>
                     </div>
                     <div id="offline-indicator" class="hidden items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border" style="background:rgba(234,179,8,0.1);color:#a16207;border-color:rgba(234,179,8,0.3);">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <svg class="lucide lucide-wifi-off-icon lucide-wifi-off" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="1" y1="1" x2="23" y2="23"/>
                             <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
                             <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
@@ -594,7 +525,7 @@
                 <!-- Persistent save-failure banner: stays until the user retries
                      successfully or the next automatic retry succeeds. -->
                 <div id="save-error-banner" class="hidden items-center gap-3 px-4 py-2.5 mt-2 rounded-lg border" style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.35);color:#b91c1c;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                    <svg class="lucide lucide-circle-alert-icon lucide-circle-alert" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
                         <circle cx="12" cy="12" r="10"/>
                         <line x1="12" y1="8" x2="12" y2="12"/>
                         <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -603,14 +534,14 @@
                         <div id="save-error-banner-title" class="text-sm font-semibold" data-i18n="save.errorTitle">Speichern fehlgeschlagen</div>
                         <div id="save-error-banner-msg" class="text-xs opacity-80" data-i18n="save.errorMsg">Deine Änderungen sind noch nicht synchronisiert. Verbindung prüfen und erneut versuchen.</div>
                     </div>
-                    <button type="button" id="save-error-banner-retry" class="btn-outline btn-small text-xs font-medium shrink-0" data-i18n="save.retry">Erneut versuchen</button>
+                    <button type="button" id="save-error-banner-retry" class="btn-outline btn-small text-xs font-medium shrink-0"><svg class="lucide lucide-refresh-cw" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> <span data-i18n="save.retry">Erneut versuchen</span></button>
                 </div>
                 <!-- Undo notification bar -->
                 <div id="undo-notification" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border" style="background:var(--card);min-width:260px;max-width:420px;">
                     <span id="undo-notification-text" class="text-sm flex-1"></span>
-                    <button id="undo-notification-btn" class="btn-outline btn-small text-xs font-medium shrink-0" data-i18n="toast.undo">Undo</button>
+                    <button id="undo-notification-btn" class="btn-outline btn-small text-xs font-medium shrink-0"><svg class="lucide lucide-undo-2" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg> <span data-i18n="toast.undo">Undo</span></button>
                     <button id="undo-notification-close" class="btn-ghost btn-icon size-6 shrink-0" style="min-width:1.5rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
                 <dialog id="clear-storage-dialog" class="dialog w-full sm:max-w-[425px]"
@@ -622,7 +553,7 @@
                         <section class="flex gap-3 items-start">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round" class="text-red-500 flex-shrink-0 mt-0.5">
+                                stroke-linejoin="round" class="text-red-500 flex-shrink-0 mt-0.5 lucide lucide-triangle-alert-icon lucide-triangle-alert">
                                 <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
                                 <path d="M12 9v4" />
                                 <path d="M12 17h.01" />
@@ -651,7 +582,7 @@
                             </button>
                         </footer>
                         <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M18 6 6 18" />
@@ -676,19 +607,19 @@
                                     <div id="profile-avatar-preview" style="width: 4rem; height: 4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 1.375rem; font-weight: 800; color: white; letter-spacing: 0.04em; flex-shrink: 0; overflow: hidden;"></div>
                                     <div class="grid gap-2 flex-1">
                                         <button type="button" id="profile-regenerate-gradient" class="btn-outline w-full">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <svg class="lucide lucide-refresh-cw-icon lucide-refresh-cw" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/>
                                             </svg>
                                             <span>Gradient neu generieren</span>
                                         </button>
                                         <label class="btn-outline w-full cursor-pointer" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;" for="profile-avatar-upload">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <svg class="lucide lucide-upload-icon lucide-upload" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                                             </svg>
                                             <span>Foto hochladen</span>
                                         </label>
                                         <input type="file" id="profile-avatar-upload" accept="image/*" class="sr-only">
-                                        <button type="button" id="profile-remove-avatar-img" class="btn-ghost w-full text-sm" style="color: var(--destructive); display: none;">Foto entfernen</button>
+                                        <button type="button" id="profile-remove-avatar-img" class="btn-ghost w-full text-sm" style="color: var(--destructive); display: none;"><svg class="lucide lucide-image-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="22" y1="2" y2="22"/><path d="M10.41 10.41a2 2 0 1 1-2.83-2.83"/><line x1="13.5" x2="6" y1="13.5" y2="21"/><line x1="18" x2="21" y1="12" y2="15"/><path d="M3.59 3.59A1.99 1.99 0 0 0 3 5v14a2 2 0 0 0 2 2h14c.55 0 1.052-.22 1.41-.59"/><path d="M21 15V5a2 2 0 0 0-2-2H9"/></svg> Foto entfernen</button>
                                     </div>
                                 </div>
                             </div>
@@ -703,14 +634,19 @@
                             <!-- Teacher Name -->
                             <div class="grid gap-2">
                                 <label for="profile-teacher-name" class="text-sm font-medium" data-i18n="profile.displayName">Display Name</label>
-                                <input type="text" id="profile-teacher-name" class="input" placeholder="Your name" data-i18n-placeholder="profile.displayNamePlaceholder">
+                                <input type="text" id="profile-teacher-name" class="input" placeholder="Your name" data-i18n-placeholder="profile.displayNamePlaceholder" data-icon="user">
                                 <p class="text-gray-400 text-sm" data-i18n="profile.displayNameHint">This name will be shown in the greeting message.</p>
                             </div>
                             <!-- School -->
                             <div class="grid gap-2">
                                 <label for="profile-school" class="text-sm font-medium" data-i18n="profile.school">School</label>
-                                <input type="text" id="profile-school" class="input" data-i18n-placeholder="profile.schoolPlaceholder" placeholder="Your school name">
+                                <input type="text" id="profile-school" class="input" data-i18n-placeholder="profile.schoolPlaceholder" placeholder="Your school name" data-icon="school">
                                 <p class="text-gray-400 text-sm" data-i18n="profile.schoolHint">Optional: Name of your school or educational institution.</p>
+                            </div>
+                            <!-- Organisation -->
+                            <div class="grid gap-2">
+                                <label class="text-sm font-medium" data-i18n="org.title">Organisation</label>
+                                <div id="profile-org-content"></div>
                             </div>
                             <!-- Language -->
                             <div class="grid gap-2">
@@ -752,7 +688,7 @@
                                         style="border-color: var(--border, #2d2d3d);">
                                         <input type="radio" name="schoolType" value="primary" id="profile-school-type-primary" class="sr-only">
                                         <div class="flex items-center gap-2">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <svg class="lucide lucide-graduation-cap-icon lucide-graduation-cap" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
                                             </svg>
                                             <span class="text-sm font-semibold">Grundschule</span>
@@ -769,7 +705,7 @@
                                         style="border-color: var(--border, #2d2d3d);">
                                         <input type="radio" name="schoolType" value="secondary" id="profile-school-type-secondary" class="sr-only">
                                         <div class="flex items-center gap-2">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <svg class="lucide lucide-monitor-icon lucide-monitor" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
                                             </svg>
                                             <span class="text-sm font-semibold">Weiterführend</span>
@@ -788,13 +724,13 @@
                             <!-- Recovery Key -->
                             <div class="p-4 rounded-lg border">
                                 <div class="flex items-center gap-2 mb-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 lucide lucide-key-round-icon lucide-key-round">
                                         <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
                                     </svg>
                                     <h3 class="text-sm font-medium" data-i18n="auth.recoveryKeyTitle">Save Your Recovery Key</h3>
                                 </div>
                                 <p class="text-gray-400 text-sm mb-3" data-i18n="auth.resetRecoveryKeyInfoShort">You will need your recovery key to reset your password. Your data will be preserved.</p>
-                                <button type="button" class="btn-outline w-full" id="profile-generate-recovery-key" data-i18n="profile.generateRecoveryKey">Generate new Recovery Key</button>
+                                <button type="button" class="btn-outline w-full" id="profile-generate-recovery-key"><svg class="lucide lucide-key-round" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg> <span data-i18n="profile.generateRecoveryKey">Generate new Recovery Key</span></button>
                             </div>
 
                             <!-- Danger Zone -->
@@ -802,7 +738,7 @@
                                 <div class="flex items-center gap-2 mb-3">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round" class="text-red-400 shrink-0">
+                                        stroke-linejoin="round" class="text-red-400 shrink-0 lucide lucide-octagon-alert-icon lucide-octagon-alert">
                                         <path d="M12 16h.01" />
                                         <path d="M12 8v4" />
                                         <path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z" />
@@ -816,7 +752,7 @@
                                             <p class="text-gray-400 text-sm" data-i18n="profile.clearDataDesc">Deletes all classes, students and grades.</p>
                                         </div>
                                         <button type="button" class="btn-outline text-red-400 border-red-400 hover:bg-red-500/10 shrink-0"
-                                            id="profile-clear-data" data-i18n="profile.clearData">Clear Data</button>
+                                            id="profile-clear-data"><svg class="lucide lucide-eraser" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg> <span data-i18n="profile.clearData">Clear Data</span></button>
                                     </div>
                                     <hr class="border-red-500/20">
                                     <div class="flex items-center justify-between gap-4">
@@ -825,7 +761,7 @@
                                             <p class="text-gray-400 text-sm" data-i18n="profile.deleteAccountDesc">Permanently deletes your account and all data.</p>
                                         </div>
                                         <button type="button" class="btn-destructive shrink-0" id="profile-delete-account"
-                                            data-i18n="profile.deleteAccount">Delete Account</button>
+                                           ><svg class="lucide lucide-user-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/></svg> <span data-i18n="profile.deleteAccount">Delete Account</span></button>
                                     </div>
                                 </div>
                             </div>
@@ -834,10 +770,10 @@
                             <button type="button" class="btn-outline" id="cancel-profile"
                                 data-i18n="dialog.cancel">Cancel</button>
                             <button type="button" class="btn-primary is-cta" id="save-profile"
-                                data-i18n="settings.saveProfile">Save Profile</button>
+                               ><svg class="lucide lucide-save" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> <span data-i18n="settings.saveProfile">Save Profile</span></button>
                         </footer>
                         <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M18 6 6 18" />
@@ -858,7 +794,7 @@
                         <section class="flex gap-3 items-start">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round" class="text-red-500 flex-shrink-0 mt-0.5">
+                                stroke-linejoin="round" class="text-red-500 flex-shrink-0 mt-0.5 lucide lucide-triangle-alert-icon lucide-triangle-alert">
                                 <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
                                 <path d="M12 9v4" />
                                 <path d="M12 17h.01" />
@@ -875,7 +811,7 @@
                             <button type="button" class="btn-outline" id="cancel-delete-account"
                                 data-i18n="dialog.cancel">Cancel</button>
                             <button type="button" class="btn-destructive" id="confirm-delete-account">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                <svg class="lucide lucide-trash-icon lucide-trash" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                     stroke-linejoin="round">
                                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
@@ -886,7 +822,7 @@
                             </button>
                         </footer>
                         <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M18 6 6 18" />
@@ -902,7 +838,7 @@
                         <header>
                             <div class="flex items-center gap-3">
                                 <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-yellow-500/15">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-500">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-500 lucide lucide-key-round-icon lucide-key-round">
                                         <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
                                     </svg>
                                 </div>
@@ -918,7 +854,7 @@
                                 <p id="profile-recovery-key-display" class="font-mono text-lg font-bold tracking-widest text-center select-all"></p>
                             </div>
                             <button type="button" id="profile-copy-recovery-key-btn" class="btn-outline w-full">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <svg class="lucide lucide-copy-icon lucide-copy" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
                                 </svg>
                                 <span data-i18n="share.copyLink">Copy</span>
@@ -927,7 +863,7 @@
                                 <p class="text-sm" data-i18n="auth.recoveryKeyWarning">This key is shown only once and cannot be recovered. Store it in a safe place.</p>
                             </div>
                             <div class="recovery-danger-box">
-                                <p class="text-sm font-medium" data-i18n="auth.recoveryKeySecurityWarning">⚠ This recovery key is extremely important. Due to the high security standards and strong encryption, your account cannot be restored without this code — not even by support.</p>
+                                <p class="text-sm font-medium flex items-start gap-2"><svg class="lucide lucide-triangle-alert shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span data-i18n="auth.recoveryKeySecurityWarning">This recovery key is extremely important. Due to the high security standards and strong encryption, your account cannot be restored without this code — not even by support.</span></p>
                             </div>
                             <label class="flex items-start gap-2 cursor-pointer">
                                 <input type="checkbox" id="profile-recovery-key-confirm" class="mt-1">
@@ -936,7 +872,7 @@
                         </section>
                         <footer class="flex justify-end gap-2">
                             <button type="button" id="profile-send-recovery-key-email-btn" class="btn-outline">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <svg class="lucide lucide-mail-icon lucide-mail" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect width="20" height="16" x="2" y="4" rx="2"/>
                                     <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                                 </svg>
@@ -953,7 +889,7 @@
                         <header>
                             <div class="flex items-center gap-3">
                                 <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-500/15">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 lucide lucide-mail-icon lucide-mail">
                                         <rect width="20" height="16" x="2" y="4" rx="2"/>
                                         <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                                     </svg>
@@ -970,7 +906,7 @@
                                 <p id="profile-recovery-key-email-display" class="font-mono text-lg font-bold tracking-widest text-center"></p>
                             </div>
                             <button type="button" class="btn-primary w-full" id="profile-recovery-key-email-send-btn">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <svg class="lucide lucide-mail-icon lucide-mail" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect width="20" height="16" x="2" y="4" rx="2"/>
                                     <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                                 </svg>
@@ -1009,13 +945,51 @@
                     </div>
                 </dialog>
 
+                <!-- Support / Ko-fi -->
+                <dialog id="support-dialog" class="dialog w-full sm:max-w-[480px]"
+                    aria-labelledby="support-dialog-title">
+                    <div>
+                        <header>
+                            <h2 id="support-dialog-title" data-i18n="support.title">Support avocloud.net</h2>
+                            <p data-i18n="support.description">EduGrade is free. Hosting is not. A tip keeps the lights on — thank you!</p>
+                        </header>
+                        <section>
+                            <iframe data-src="https://ko-fi.com/avocloudnet/?hidefeed=true&amp;widget=true&amp;embed=true&amp;preview=true"
+                                title="avocloudnet" height="712"
+                                style="border:none;width:100%;padding:4px;background:#f9f9f9;border-radius:var(--radius);"></iframe>
+                        </section>
+                        <footer class="flex justify-end gap-2">
+                            <button type="button" class="btn-outline" onclick="this.closest('dialog').close()"
+                                data-i18n="dialog.close">Close</button>
+                        </footer>
+                        <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()"
+                            data-tooltip="Close dialog" data-i18n-tooltip="dialog.closeDialog" data-side="top">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" class="lucide lucide-x-icon lucide-x">
+                                <path d="M18 6 6 18" />
+                                <path d="m6 6 12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </dialog>
+                <script>
+                    // Ko-fi iframe loads on first open only — no third-party request on page load.
+                    function openSupportDialog() {
+                        const dlg = document.getElementById('support-dialog');
+                        const frame = dlg.querySelector('iframe');
+                        if (!frame.src) frame.src = frame.dataset.src;
+                        dlg.showModal();
+                    }
+                </script>
+
                 <!-- Home View -->
                 <section id="home-view" class="mt-10">
                     <!-- Breadcrumb -->
                     <nav aria-label="Breadcrumb" class="mb-6">
                         <ol class="text-gray-400 flex flex-wrap items-center gap-1.5 text-sm break-words sm:gap-2.5">
                             <li class="inline-flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                <svg class="lucide lucide-house-icon lucide-house" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                     stroke-linejoin="round">
                                     <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -1028,7 +1002,7 @@
                     <div class="card mb-6">
                         <header class="mb-3 px-4 pt-4">
                             <h2 class="text-xl font-semibold mb-3" data-i18n="home.classOverview">Class Overview</h2>
-                            <input type="search" id="home-search" class="input w-full" data-i18n-placeholder="search.placeholder">
+                            <input type="search" id="home-search" class="input w-full" data-i18n-placeholder="search.placeholder" data-icon="search">
                         </header>
                         <div id="class-overview-list" class="space-y-3 px-4 pb-4"></div>
                         <div id="home-search-results" class="hidden px-4 pb-4"></div>
@@ -1040,7 +1014,7 @@
                                 <div class="p-3 rounded-lg bg-blue-100">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round" class="text-blue-600">
+                                        stroke-linejoin="round" class="text-blue-600 lucide lucide-users-round-icon lucide-users-round">
                                         <path d="M18 21a8 8 0 0 0-16 0" />
                                         <circle cx="10" cy="8" r="5" />
                                         <path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3" />
@@ -1058,7 +1032,7 @@
                                 <div class="p-3 rounded-lg bg-green-100">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round" class="text-green-600">
+                                        stroke-linejoin="round" class="text-green-600 lucide lucide-users-icon lucide-users">
                                         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                                         <circle cx="9" cy="7" r="4" />
                                         <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
@@ -1077,7 +1051,7 @@
                                 <div class="p-3 rounded-lg bg-yellow-100">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round" class="text-yellow-600">
+                                        stroke-linejoin="round" class="text-yellow-600 lucide lucide-graduation-cap-icon lucide-graduation-cap">
                                         <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
                                         <path d="M6 12v5c3 3 9 3 12 0v-5" />
                                     </svg>
@@ -1094,7 +1068,7 @@
                                 <div class="p-3 rounded-lg bg-purple-100">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round" class="text-purple-600">
+                                        stroke-linejoin="round" class="text-purple-600 lucide lucide-pen-line-icon lucide-pen-line">
                                         <path d="M12 20h9" />
                                         <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                                     </svg>
@@ -1120,7 +1094,7 @@
                             <li>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round" class="size-3.5">
+                                    stroke-linejoin="round" class="size-3.5 lucide lucide-chevron-right-icon lucide-chevron-right">
                                     <path d="m9 18 6-6-6-6" />
                                 </svg>
                             </li>
@@ -1148,17 +1122,17 @@
                         <section class="mb-4 flex gap-2 items-center">
                             <input type="text" id="search-students" class="input flex-1"
                                 placeholder="Search by name or grade..."
-                                data-i18n-placeholder="class.searchPlaceholder">
-                            <select id="filter-category" class="select">
+                                data-i18n-placeholder="class.searchPlaceholder" data-icon="search">
+                            <select id="filter-category" class="select" data-icon="tag">
                                 <option value="">All Categories</option>
                             </select>
-                            <select id="filter-attendance" class="select">
+                            <select id="filter-attendance" class="select" data-icon="list-checks">
                                 <option value="" data-i18n="class.filterAttendanceAll">All Attendance</option>
                                 <option value="warning" data-i18n="class.filterAttendanceWarning">Near Limit</option>
                                 <option value="critical" data-i18n="class.filterAttendanceCritical">Over Limit</option>
                             </select>
                             <button id="compact-view-toggle" class="btn-icon-outline shrink-0" data-tooltip="Kompaktansicht" data-side="top" title="Kompaktansicht umschalten">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <svg class="lucide lucide-align-justify-icon lucide-align-justify" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="3" y1="18" x2="21" y2="18"/>
                                 </svg>
                             </button>
@@ -1188,12 +1162,12 @@
                                         <th style="width: 40px;">
                                             <input type="checkbox" id="select-all-students" class="checkbox" title="Alle auswählen">
                                         </th>
-                                        <th class="sortable-header" data-sort="lastName" style="cursor:pointer;user-select:none;white-space:nowrap;"><span data-i18n="table.lastName">Last Name</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
-                                        <th class="sortable-header" data-sort="firstName" style="cursor:pointer;user-select:none;white-space:nowrap;"><span data-i18n="table.firstName">First Name</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
+                                        <th class="sortable-header" data-sort="lastName" style="cursor:pointer;user-select:none;white-space:nowrap;"><span data-i18n="table.lastName">Last Name</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg class="lucide lucide-arrow-up-down-icon lucide-arrow-up-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
+                                        <th class="sortable-header" data-sort="firstName" style="cursor:pointer;user-select:none;white-space:nowrap;"><span data-i18n="table.firstName">First Name</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg class="lucide lucide-arrow-up-down-icon lucide-arrow-up-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
                                         <th class="compact-hide" data-i18n="table.middleName">Middle Name</th>
-                                        <th class="sortable-header" data-sort="gradeCount" style="cursor:pointer;user-select:none;white-space:nowrap;"><span data-i18n="table.gradeCount"># Grades</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
-                                        <th class="sortable-header" data-sort="weighted" style="cursor:pointer;user-select:none;white-space:nowrap;"><span data-i18n="table.semWeighted">Sem. Avg.</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
-                                        <th class="sortable-header" data-sort="finalGrade" style="cursor:pointer;user-select:none;white-space:nowrap;"><span id="students-finalgrade-header-label" data-i18n="table.semFinalGrade">Sem. Grade</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
+                                        <th class="sortable-header" data-sort="gradeCount" style="cursor:pointer;user-select:none;white-space:nowrap;"><span data-i18n="table.gradeCount"># Grades</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg class="lucide lucide-arrow-up-down-icon lucide-arrow-up-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
+                                        <th class="sortable-header" data-sort="weighted" style="cursor:pointer;user-select:none;white-space:nowrap;"><span data-i18n="table.semWeighted">Sem. Avg.</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg class="lucide lucide-arrow-up-down-icon lucide-arrow-up-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
+                                        <th class="sortable-header" data-sort="finalGrade" style="cursor:pointer;user-select:none;white-space:nowrap;"><span id="students-finalgrade-header-label" data-i18n="table.semFinalGrade">Sem. Grade</span> <span class="sort-icon" style="opacity:0.4;vertical-align:middle;"><svg class="lucide lucide-arrow-up-down-icon lucide-arrow-up-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></span></th>
                                         <th data-i18n="table.yearOverview">Year Overview</th>
                                         <th data-i18n="table.actions">Actions</th>
                                     </tr>
@@ -1208,37 +1182,37 @@
                         <section class="mt-6">
                             <div id="class-action-buttons" class="flex flex-wrap gap-2">
                                 <button id="add-student" class="btn-primary">
-                                    <svg class="lucide lucide-user-plus" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                        <circle cx="8.5" cy="7" r="4" />
-                                        <line x1="20" y1="8" x2="20" y2="14" />
-                                        <line x1="23" y1="11" x2="17" y2="11" />
+                                    <svg class="lucide lucide-plus-icon lucide-plus" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M5 12h14" />
+                                        <path d="M12 5v14" />
                                     </svg>
                                     <span class="hidden sm:inline" data-i18n="class.addStudent">Add Student</span>
                                     <span class="sm:hidden" data-i18n="class.addStudentShort">Schüler</span>
                                     <kbd class="kbd hidden sm:inline" style="font-size:0.6rem;padding:0.1rem 0.35rem;opacity:0.6;">S</kbd>
                                 </button>
                                 <button id="class-exam-btn" class="btn-primary flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M9 11l3 3L22 4"/>
-                                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                                    <svg class="lucide lucide-file-text-icon lucide-file-text" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/>
+                                        <path d="M14 2v5a1 1 0 0 0 1 1h5"/>
+                                        <path d="M10 9H8" pathLength="100"/>
+                                        <path d="M16 13H8" pathLength="100"/>
+                                        <path d="M16 17H8" pathLength="100"/>
                                     </svg>
                                     <span class="hidden sm:inline" data-i18n="classExam.title">Klassenarbeit</span>
                                     <span class="sm:hidden" data-i18n="classExam.titleShort">Test</span>
                                 </button>
                                 <button id="add-attendance-btn" class="btn-primary flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                                        <circle cx="9" cy="7" r="4"></circle>
-                                        <polyline points="16 11 18 13 22 9"></polyline>
+                                    <svg class="lucide lucide-user-round-check-icon lucide-user-round-check" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M2 21a8 8 0 0 1 13.292-6"/>
+                                        <circle cx="10" cy="8" r="5"/>
+                                        <path d="m16 19 2 2 4-4"/>
                                     </svg>
                                     <span class="hidden sm:inline" data-i18n="attendance.title">Anwesenheit</span>
                                     <span class="sm:hidden" data-i18n="attendance.titleShort">Anwes.</span>
                                 </button>
                                 <button id="import-students-btn" class="btn-secondary">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    <svg class="lucide lucide-upload-icon lucide-upload" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                         stroke-linejoin="round">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1249,7 +1223,7 @@
                                     <span class="sm:hidden" data-i18n="class.importStudentsShort">Import</span>
                                 </button>
                                 <button id="student-access-btn" class="btn-secondary">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    <svg class="lucide lucide-link-icon lucide-link" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                         stroke-linejoin="round">
                                         <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -1257,6 +1231,16 @@
                                     </svg>
                                     <span class="hidden sm:inline" data-i18n="class.studentAccess">Student Access</span>
                                     <span class="sm:hidden" data-i18n="class.studentAccessShort">Zugang</span>
+                                </button>
+                                <button id="org-handover-btn" class="btn-secondary hidden">
+                                    <svg class="lucide lucide-repeat-icon lucide-repeat" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="m17 2 4 4-4 4"/>
+                                        <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+                                        <path d="m7 22-4-4 4-4"/>
+                                        <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+                                    </svg>
+                                    <span class="hidden sm:inline" data-i18n="org.handoverClass">Klasse übergeben</span>
+                                    <span class="sm:hidden" data-i18n="org.handoverClass">Klasse übergeben</span>
                                 </button>
                             </div>
                         </section>
@@ -1294,7 +1278,7 @@
                             <li>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round" class="size-3.5">
+                                    stroke-linejoin="round" class="size-3.5 lucide lucide-chevron-right-icon lucide-chevron-right">
                                     <path d="m9 18 6-6-6-6" />
                                 </svg>
                             </li>
@@ -1304,7 +1288,7 @@
                             <li>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round" class="size-3.5">
+                                    stroke-linejoin="round" class="size-3.5 lucide lucide-chevron-right-icon lucide-chevron-right">
                                     <path d="m9 18 6-6-6-6" />
                                 </svg>
                             </li>
@@ -1317,7 +1301,7 @@
                         <header class="flex justify-between items-center mb-4">
                             <div class="flex items-center gap-3">
                                 <button id="back-to-class" class="btn-outline">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    <svg class="lucide lucide-arrow-left-icon lucide-arrow-left" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                         stroke-linejoin="round">
                                         <path d="m12 19-7-7 7-7" />
@@ -1331,16 +1315,16 @@
                             <div class="flex gap-2 items-center">
                                 <div class="flex gap-1">
                                     <button id="prev-student-btn" class="btn-icon-outline" data-i18n-tooltip="student.prevStudent" data-side="bottom" disabled>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                                        <svg class="lucide lucide-chevron-left-icon lucide-chevron-left" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                                     </button>
                                     <button id="next-student-btn" class="btn-icon-outline" data-i18n-tooltip="student.nextStudent" data-side="bottom" disabled>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                                        <svg class="lucide lucide-chevron-right-icon lucide-chevron-right" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                                     </button>
                                 </div>
                                 <button id="student-detail-print" class="btn-outline">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
+                                        stroke-linejoin="round" class="lucide lucide-printer-icon lucide-printer">
                                         <polyline points="6 9 6 2 18 2 18 9"></polyline>
                                         <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
                                         <rect x="6" y="14" width="12" height="8"></rect>
@@ -1350,7 +1334,7 @@
                                 <button id="student-detail-add-grade" class="btn-primary">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
+                                        stroke-linejoin="round" class="lucide lucide-plus-icon lucide-plus">
                                         <path d="M5 12h14" />
                                         <path d="M12 5v14" />
                                     </svg>
@@ -1365,7 +1349,7 @@
                                  Hidden when the student has no notes. -->
                             <div id="student-detail-notes-card" class="hidden mb-4 p-3 border rounded-lg" style="background:rgba(245,158,11,0.08); border-color:rgba(245,158,11,0.35);">
                                 <div class="flex items-start gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; color:#b45309; margin-top:2px;">
+                                    <svg class="lucide lucide-file-text-icon lucide-file-text" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; color:#b45309; margin-top:2px;">
                                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                         <polyline points="14 2 14 8 20 8"/>
                                         <line x1="16" y1="13" x2="8" y2="13"/>
@@ -1414,7 +1398,7 @@
                             <div class="mb-6 rounded-lg border" id="student-attendance-section">
                                 <button type="button" class="collapsible-toggle w-full flex items-center justify-between p-4 text-left" data-target="attendance-collapsible">
                                     <h3 class="text-lg font-semibold" data-i18n="attendance.title">Anwesenheit</h3>
-                                    <svg class="collapsible-chevron size-5 text-gray-400 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <svg class="collapsible-chevron size-5 text-gray-400 transition-transform duration-200 lucide lucide-chevron-down-icon lucide-chevron-down" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="m6 9 6 6 6-6"/>
                                     </svg>
                                 </button>
@@ -1467,7 +1451,7 @@
                             <div class="mb-6 rounded-lg border">
                                 <button type="button" class="collapsible-toggle w-full flex items-center justify-between p-4 text-left" data-target="chart-collapsible">
                                     <h3 class="text-lg font-semibold" data-i18n="student.gradeProgression">Notenentwicklung</h3>
-                                    <svg class="collapsible-chevron size-5 text-gray-400 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <svg class="collapsible-chevron size-5 text-gray-400 transition-transform duration-200 lucide lucide-chevron-down-icon lucide-chevron-down" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="m6 9 6 6 6-6"/>
                                     </svg>
                                 </button>
@@ -1482,7 +1466,7 @@
                             <div class="mb-6 rounded-lg border">
                                 <button type="button" class="collapsible-toggle w-full flex items-center justify-between p-4 text-left" data-target="category-collapsible">
                                     <h3 class="text-lg font-semibold" data-i18n="student.categoryBreakdown">Category Breakdown</h3>
-                                    <svg class="collapsible-chevron size-5 text-gray-400 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <svg class="collapsible-chevron size-5 text-gray-400 transition-transform duration-200 lucide lucide-chevron-down-icon lucide-chevron-down" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="m6 9 6 6 6-6"/>
                                     </svg>
                                 </button>
@@ -1496,7 +1480,7 @@
                             <div class="rounded-lg border">
                                 <button type="button" class="collapsible-toggle w-full flex items-center justify-between p-4 text-left" data-target="grades-collapsible">
                                     <h3 class="text-lg font-semibold" data-i18n="student.gradeHistory">Grade History</h3>
-                                    <svg class="collapsible-chevron size-5 text-gray-400 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <svg class="collapsible-chevron size-5 text-gray-400 transition-transform duration-200 lucide lucide-chevron-down-icon lucide-chevron-down" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="m6 9 6 6 6-6"/>
                                     </svg>
                                 </button>
@@ -1505,7 +1489,7 @@
                                     <div class="mb-4">
                                         <input type="text" id="student-grades-search" class="input w-full"
                                             data-i18n-placeholder="student.searchGrades"
-                                            placeholder="Noten durchsuchen...">
+                                            placeholder="Noten durchsuchen..." data-icon="search">
                                     </div>
 
                                     <div class="overflow-x-auto">
@@ -1536,11 +1520,11 @@
                             <li class="inline-flex items-center gap-1.5">
                                 <a href="#" id="breadcrumb-att-home" class="hover:text-foreground transition-colors" data-i18n="nav.home">Home</a>
                             </li>
-                            <li><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3.5"><path d="m9 18 6-6-6-6"/></svg></li>
+                            <li><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3.5 lucide lucide-chevron-right-icon lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg></li>
                             <li class="inline-flex items-center gap-1.5">
                                 <a href="#" id="breadcrumb-att-class" class="hover:text-foreground transition-colors"></a>
                             </li>
-                            <li><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3.5"><path d="m9 18 6-6-6-6"/></svg></li>
+                            <li><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3.5 lucide lucide-chevron-right-icon lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg></li>
                             <li class="inline-flex items-center gap-1.5">
                                 <span class="text-foreground font-medium" data-i18n="attendance.title">Anwesenheit</span>
                             </li>
@@ -1551,7 +1535,7 @@
                         <header class="flex justify-between items-center p-4">
                             <div class="flex items-center gap-3">
                                 <button id="attendance-back-btn" class="btn-outline">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                                    <svg class="lucide lucide-arrow-left-icon lucide-arrow-left" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
                                     <span data-i18n="student.back">Zurück</span>
                                     <kbd class="kbd" style="font-size:0.6rem;padding:0.1rem 0.35rem;opacity:0.5;">Esc</kbd>
                                 </button>
@@ -1588,7 +1572,7 @@
                             <li>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round" class="size-3.5">
+                                    stroke-linejoin="round" class="size-3.5 lucide lucide-chevron-right-icon lucide-chevron-right">
                                     <path d="m9 18 6-6-6-6" />
                                 </svg>
                             </li>
@@ -1617,6 +1601,18 @@
                                 <span class="hidden sm:inline" data-i18n="settings.attendance">Attendance</span>
                                 <span class="sm:hidden" data-i18n="settings.attendanceShort">Anwes.</span>
                             </button>
+                            <button role="tab" aria-controls="settings-panel-organisation" aria-selected="false" tabindex="-1">
+                                <span class="hidden sm:inline" data-i18n="settings.organisation">Organisation</span>
+                                <span class="sm:hidden" data-i18n="settings.organisationShort">Orga</span>
+                            </button>
+                            <button role="tab" aria-controls="settings-panel-webuntis" aria-selected="false" tabindex="-1">
+                                <span class="hidden sm:inline" data-i18n="settings.webuntis">WebUntis</span>
+                                <span class="sm:hidden" data-i18n="settings.webuntisShort">Untis</span>
+                            </button>
+                            <button role="tab" aria-controls="settings-panel-moodle" aria-selected="false" tabindex="-1">
+                                <span class="hidden sm:inline" data-i18n="settings.moodle">Moodle</span>
+                                <span class="sm:hidden" data-i18n="settings.moodleShort">Moodle</span>
+                            </button>
                         </nav>
 
                         <!-- Panel: Default Subjects -->
@@ -1629,10 +1625,8 @@
                                     <p class="text-gray-400 text-sm mb-3" data-i18n="profile.defaultSubjectsHint">These subjects will be automatically created for new classes.</p>
                                     <div class="flex gap-2 mb-3">
                                         <input type="text" id="settings-subject-input" class="input flex-1"
-                                            data-i18n-placeholder="profile.subjectPlaceholder" placeholder="Subject name (e.g. Mathematics)">
-                                        <button type="button" id="settings-add-subject-btn" class="btn-primary">
-                                            <span data-i18n="profile.addSubject">Add Subject</span>
-                                        </button>
+                                            data-i18n-placeholder="profile.subjectPlaceholder" placeholder="Subject name (e.g. Mathematics)" data-icon="book-open">
+                                        <button type="button" id="settings-add-subject-btn" class="btn-primary"><svg class="lucide lucide-plus" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span data-i18n="profile.addSubject">Add Subject</span></button>
                                     </div>
                                     <div id="settings-subjects-list" class="grid gap-1 mb-4"></div>
                                 </div>
@@ -1705,7 +1699,7 @@
                                             <span>%</span>
                                         </div>
                                     </div>
-                                    <button id="save-percentage-ranges" class="btn-primary mt-4 w-full" data-i18n="category.saveRanges">Save Ranges</button>
+                                    <button id="save-percentage-ranges" class="btn-primary mt-4 w-full"><svg class="lucide lucide-save" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> <span data-i18n="category.saveRanges">Save Ranges</span></button>
                                 </div>
                             </div>
                             <!-- Plus/Minus Settings -->
@@ -1750,7 +1744,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <button id="save-plusminus-settings" class="btn-primary mt-4 w-full" data-i18n="category.saveSettings">Save Settings</button>
+                                    <button id="save-plusminus-settings" class="btn-primary mt-4 w-full"><svg class="lucide lucide-save" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> <span data-i18n="category.saveSettings">Save Settings</span></button>
                                 </div>
                             </div>
                         </div>
@@ -1789,9 +1783,24 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <button id="save-attendance-settings" class="btn-primary mt-4 w-full" data-i18n="attendance.saveSettings">Save Settings</button>
+                                    <button id="save-attendance-settings" class="btn-primary mt-4 w-full"><svg class="lucide lucide-save" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> <span data-i18n="attendance.saveSettings">Save Settings</span></button>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Panel: Organisation -->
+                        <div role="tabpanel" id="settings-panel-organisation" hidden class="pb-6">
+                            <div id="org-panel-content"></div>
+                        </div>
+
+                        <!-- Panel: WebUntis -->
+                        <div role="tabpanel" id="settings-panel-webuntis" hidden class="pb-6">
+                            <div id="webuntis-panel-content"></div>
+                        </div>
+
+                        <!-- Panel: Moodle -->
+                        <div role="tabpanel" id="settings-panel-moodle" hidden class="pb-6">
+                            <div id="moodle-panel-content"></div>
                         </div>
                     </div>
                 </section>
@@ -1809,7 +1818,7 @@
                             <button type="button" class="btn-outline" id="cancel-edit"
                                 data-i18n="dialog.cancel">Cancel</button>
                             <button type="submit" class="btn-primary is-cta" form="edit-form"
-                                data-i18n="dialog.save">Save</button>
+                               ><svg class="lucide lucide-save" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> <span data-i18n="dialog.save">Save</span></button>
                         </footer>
                         <button type="button" aria-label="Close dialog"
                             data-tooltip="Close dialog" data-i18n-tooltip="dialog.closeDialog" data-side="top">
@@ -1835,7 +1844,7 @@
                         <section class="flex gap-3 items-start">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round" class="text-red-500 flex-shrink-0 mt-0.5">
+                                stroke-linejoin="round" class="text-red-500 flex-shrink-0 mt-0.5 lucide lucide-triangle-alert-icon lucide-triangle-alert">
                                 <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
                                 <path d="M12 9v4" />
                                 <path d="M12 17h.01" />
@@ -1853,7 +1862,7 @@
                                 data-i18n="dialog.delete">Delete</button>
                         </footer>
                         <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M18 6 6 18" />
@@ -1875,7 +1884,7 @@
                                 <div class="grid gap-2">
                                     <label for="class-name-input" class="block mb-2"
                                         data-i18n="class.classNameLabel">Class Name</label>
-                                    <input type="text" id="class-name-input" name="name" class="input w-full" required>
+                                    <input type="text" id="class-name-input" name="name" class="input w-full" required data-icon="users">
                                 </div>
                             </form>
                         </section>
@@ -1883,10 +1892,10 @@
                             <button type="button" class="btn-outline" id="cancel-add-class"
                                 data-i18n="dialog.cancel">Cancel</button>
                             <button type="submit" class="btn-primary is-cta" form="add-class-form"
-                                data-i18n="dialog.add">Add</button>
+                               ><svg class="lucide lucide-plus" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span data-i18n="dialog.add">Add</span></button>
                         </footer>
                         <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M18 6 6 18" />
@@ -1909,7 +1918,7 @@
                             <div id="student-access-content" class="py-2">
                                 <div class="flex items-center justify-center p-8">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2" class="animate-spin">
+                                        fill="none" stroke="currentColor" stroke-width="2" class="animate-spin lucide lucide-loader-circle-icon lucide-loader-circle">
                                         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                                     </svg>
                                 </div>
@@ -1921,7 +1930,35 @@
                         </footer>
                         <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()"
                             data-tooltip="Close dialog" data-i18n-tooltip="dialog.closeDialog" data-side="top">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M18 6 6 18" />
+                                <path d="m6 6 12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </dialog>
+
+                <!-- Organisation: Class Handover Dialog -->
+                <dialog id="org-handover-dialog" class="dialog w-full sm:max-w-[500px]"
+                    aria-labelledby="org-handover-dialog-title" onclick="if (event.target === this) this.close()">
+                    <div>
+                        <header>
+                            <h2 id="org-handover-dialog-title" data-i18n="org.handoverClass">Klasse übergeben</h2>
+                            <p class="text-gray-400 text-sm" data-i18n="org.handoverSubtitle">
+                                Übergib diese Klasse an eine andere Lehrkraft deiner Organisation.</p>
+                        </header>
+                        <section class="overflow-y-auto max-h-[60vh]">
+                            <div id="org-handover-content" class="py-2"></div>
+                        </section>
+                        <footer class="flex justify-end gap-2">
+                            <button type="button" class="btn-outline" id="close-org-handover"
+                                data-i18n="dialog.close">Close</button>
+                        </footer>
+                        <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()"
+                            data-tooltip="Close dialog" data-i18n-tooltip="dialog.closeDialog" data-side="top">
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M18 6 6 18" />
@@ -1944,12 +1981,12 @@
                                     <label for="student-firstname-input" class="block mb-2"
                                         data-i18n="student.firstName">First Name</label>
                                     <input type="text" id="student-firstname-input" name="firstName" class="input w-full"
-                                        required>
+                                        required data-icon="user">
                                 </div>
                                 <div class="grid gap-2">
                                     <label for="student-middlename-input" class="block mb-2"
                                         data-i18n="student.middleName">Middle Name</label>
-                                    <input type="text" id="student-middlename-input" name="middleName" class="input w-full">
+                                    <input type="text" id="student-middlename-input" name="middleName" class="input w-full" data-icon="user">
                                     <p class="text-gray-400 text-sm"
                                         data-i18n="student.middleNameHint">Optional: if the student has a second first name.</p>
                                 </div>
@@ -1957,7 +1994,7 @@
                                     <label for="student-lastname-input" class="block mb-2"
                                         data-i18n="student.lastName">Last Name</label>
                                     <input type="text" id="student-lastname-input" name="lastName" class="input w-full"
-                                        required>
+                                        required data-icon="user">
                                 </div>
                             </form>
                         </section>
@@ -1975,7 +2012,7 @@
                                 </svg> <span data-i18n="dialog.add">Add</span></button>
                         </footer>
                         <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M18 6 6 18" />
@@ -2001,7 +2038,7 @@
 
                                     <!-- Download Template Button -->
                                     <button type="button" id="download-csv-template-btn" class="btn-outline btn-small w-fit">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                        <svg class="lucide lucide-download-icon lucide-download" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                                         <span data-i18n="import.downloadTemplate">Beispiel-CSV herunterladen</span>
                                     </button>
                                 </div>
@@ -2056,7 +2093,7 @@ Anna,,Schmidt</code></pre>
                             <button type="button" class="btn-outline" id="cancel-import-students"
                                 data-i18n="dialog.cancel">Cancel</button>
                             <button type="button" class="btn-primary" id="confirm-import-students" disabled>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                <svg class="lucide lucide-upload-icon lucide-upload" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                     stroke-linejoin="round">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -2068,7 +2105,7 @@ Anna,,Schmidt</code></pre>
                         </footer>
                         <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()"
                             data-tooltip="Close dialog" data-i18n-tooltip="dialog.closeDialog" data-side="top">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <path d="M18 6 6 18" />
@@ -2084,17 +2121,17 @@ Anna,,Schmidt</code></pre>
                 <header class="qsb-header">
                     <div style="display:flex;align-items:center;gap:0.5rem;flex:1;min-width:0">
                         <button id="qsb-prev-btn" class="btn-icon btn-secondary" aria-label="Previous" disabled>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                            <svg class="lucide lucide-chevron-left-icon lucide-chevron-left" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
                         </button>
                         <h2 id="qsb-name" style="font-weight:600;font-size:1rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></h2>
                         <button id="qsb-next-btn" class="btn-icon btn-secondary" aria-label="Next" disabled>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                            <svg class="lucide lucide-chevron-right-icon lucide-chevron-right" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
                         </button>
                     </div>
                     <div style="display:flex;gap:0.4rem;flex-shrink:0">
-                        <button id="qsb-fullscreen-btn" class="btn-outline" style="padding:0.25rem 0.6rem;font-size:0.8rem;white-space:nowrap" data-i18n="student.fullView">Vollansicht</button>
+                        <button id="qsb-fullscreen-btn" class="btn-outline" style="padding:0.25rem 0.6rem;font-size:0.8rem;white-space:nowrap"><svg class="lucide lucide-maximize" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg> <span data-i18n="student.fullView">Vollansicht</span></button>
                         <button id="qsb-close-btn" class="btn-icon btn-secondary" aria-label="Close">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                         </button>
                     </div>
                 </header>
@@ -2118,6 +2155,9 @@ Anna,,Schmidt</code></pre>
     <script src="/static/scripts/exportImport.js?v={{ app_version }}"></script>
     <script src="/static/scripts/tutorial.js?v={{ app_version }}"></script>
     <script src="/static/scripts/eventListeners.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/organisation.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/webuntis.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/moodle.js?v={{ app_version }}"></script>
     <script src="/static/scripts/mobile.js?v={{ app_version }}"></script>
     <script src="/static/scripts/app-promo.js?v={{ app_version }}"></script>
 
@@ -2228,6 +2268,8 @@ Anna,,Schmidt</code></pre>
                 if (primaryRadio) primaryRadio.checked = (schoolType === 'primary');
                 if (secondaryRadio) secondaryRadio.checked = (schoolType === 'secondary');
                 updateSchoolTypeCardStyles();
+
+                if (window.renderProfileOrgWidget) window.renderProfileOrgWidget();
 
                 profileDialog.showModal();
             };
@@ -2448,10 +2490,10 @@ Anna,,Schmidt</code></pre>
                             <span class="text-gray-400 text-sm ml-2">${escapeHtml(buildSettingsSummary(subject))}</span>
                         </div>
                         <button type="button" class="edit-subject-btn btn-sm-icon-outline shrink-0" data-index="${index}" title="${t("subject.editAttendanceTooltip")}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            <svg class="lucide lucide-pencil-icon lucide-pencil" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
                         <button type="button" class="remove-subject-btn btn-sm-icon-outline shrink-0" data-index="${index}" title="${t("subject.removeTooltip")}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     </div>
                 `).join('');
@@ -2825,67 +2867,7 @@ Anna,,Schmidt</code></pre>
             navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
         }
     </script>
-    <script>
-        (function () {
-            var overlay = document.getElementById('avo-intro-overlay');
-            if (!overlay) return;
-
-            // Only play when arriving directly from a login
-            if (!sessionStorage.getItem('avoShowIntro')) {
-                overlay.remove();
-                return;
-            }
-            sessionStorage.removeItem('avoShowIntro');
-
-            // Block toasts and dialogs until animation finishes
-            window._avoIntroPlaying = true;
-
-            document.body.style.overflow = 'hidden';
-
-            function playAvoIntro() {
-                var path    = overlay.querySelector('.avo-path');
-                var icon    = overlay.querySelector('.avo-icon');
-                var av      = overlay.querySelector('.avo-av');
-                var wrap    = overlay.querySelector('.avo-text-wrap');
-                var text    = overlay.querySelector('.avo-text');
-                var tagline = overlay.querySelector('.avo-tagline');
-
-                // Phase 1: typewriter SVG draw (1000ms)
-                path.style.transition = 'none';
-                path.style.strokeDashoffset = '200';
-                void path.getBoundingClientRect();
-                path.style.transition = 'stroke-dashoffset 1400ms cubic-bezier(.4,0,.2,1)';
-                path.style.strokeDashoffset = '0';
-
-                // Phase 2: icon fades out, AV + OCLOUD.NET slide in
-                setTimeout(function () {
-                    icon.style.opacity   = '0';
-                    icon.style.transform = 'translateX(-10px)';
-                    av.style.opacity     = '1';
-                    av.style.transform   = 'translateX(0)';
-                    setTimeout(function () {
-                        wrap.style.maxWidth      = '100vw';
-                        text.style.opacity       = '1';
-                        text.style.transform     = 'translateX(0)';
-                        tagline.style.opacity    = '0.35';
-                        tagline.style.transform  = 'translateY(0)';
-                    }, 500);
-                }, 1500);
-
-                // Phase 3: hold, then fade out overlay
-                setTimeout(function () {
-                    overlay.classList.add('avo-fade-out');
-                    setTimeout(function () {
-                        overlay.remove();
-                        document.body.style.overflow = '';
-                        window._avoIntroPlaying = false;
-                    }, 900);
-                }, 3800);
-            }
-
-            document.fonts.ready.then(playAvoIntro);
-        })();
-    </script>
+    <script src="/static/scripts/splash.js?v={{ app_version }}"></script>
     <script>
         // Collapsible sections for student detail view
         (function () {
@@ -2955,7 +2937,7 @@ Anna,,Schmidt</code></pre>
             <div class="class-exam-header">
                 <h2 id="class-exam-title" class="text-lg font-semibold" data-i18n="classExam.title">Klassenarbeit</h2>
                 <button id="class-exam-close" class="btn-icon btn-secondary" aria-label="Schließen">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" pathLength="100"/><line x1="6" y1="6" x2="18" y2="18" pathLength="100"/></svg>
                 </button>
             </div>
             <div class="class-exam-body">
@@ -2964,10 +2946,10 @@ Anna,,Schmidt</code></pre>
                         <div class="class-exam-empty-plus">+</div>
                         <div style="font-weight:600;color:var(--foreground);" data-i18n="classExam.overviewEmpty">Noch keine Klassenarbeiten in diesem Fach.</div>
                         <div style="font-size:0.85rem;" data-i18n="classExam.overviewEmptyHint">Lege jetzt deine erste Klassenarbeit an.</div>
-                        <button id="class-exam-new-btn-empty" class="btn-primary is-cta" style="padding:0.75rem 1.25rem;margin-top:0.75rem;" data-i18n="classExam.newExam">+ Neue Klassenarbeit</button>
+                        <button id="class-exam-new-btn-empty" class="btn-primary is-cta" style="padding:0.75rem 1.25rem;margin-top:0.75rem;"><svg class="lucide lucide-plus" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span data-i18n="classExam.newExam">Neue Klassenarbeit</span></button>
                     </div>
                     <div id="class-exam-overview-nonempty" style="display:none;">
-                        <button id="class-exam-new-btn" class="btn-primary is-cta w-full" style="padding: 0.875rem; font-size: 1.05rem;" data-i18n="classExam.newExam">+ Neue Klassenarbeit</button>
+                        <button id="class-exam-new-btn" class="btn-primary is-cta w-full" style="padding: 0.875rem; font-size: 1.05rem;"><svg class="lucide lucide-plus" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> <span data-i18n="classExam.newExam">Neue Klassenarbeit</span></button>
                         <div id="class-exam-overview-list" class="space-y-1 w-full" style="margin-top:0.75rem;"></div>
                     </div>
                 </div>
@@ -2980,7 +2962,7 @@ Anna,,Schmidt</code></pre>
                 <div style="width:2.5rem;"></div>
                 <h2 class="text-lg font-semibold" data-i18n="classExam.newExam">Neue Klassenarbeit</h2>
                 <button id="class-exam-close-setup" class="btn-icon btn-secondary" aria-label="Zurück zur Übersicht">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
             <div class="class-exam-body">
@@ -2992,18 +2974,19 @@ Anna,,Schmidt</code></pre>
                     </div>
                     <div class="grid gap-2">
                         <label class="block mb-1 font-medium" data-i18n="classExam.subject">Fach</label>
-                        <select id="class-exam-subject" class="select w-full" required></select>
+                        <select id="class-exam-subject" class="select w-full" required data-icon="book-open"></select>
                     </div>
                     <div class="grid gap-2">
                         <label class="block mb-1 font-medium" data-i18n="grade.category">Kategorie</label>
-                        <select id="class-exam-category" class="select w-full" required></select>
+                        <select id="class-exam-category" class="select w-full" required data-icon="tag"></select>
                     </div>
                     <div class="grid gap-2">
                         <label class="block mb-1 font-medium" data-i18n="grade.gradeDate">Datum</label>
                         <input type="date" id="class-exam-date" class="input w-full" required>
+                        <p id="class-exam-webuntis-hint" class="text-xs text-gray-400 hidden"></p>
                     </div>
                     <div id="class-exam-setup-error" class="text-red-500 text-sm hidden"></div>
-                    <button id="class-exam-start" class="btn-primary is-cta w-full" style="padding: 0.875rem; font-size: 1.1rem; margin-top: 0.5rem;" data-i18n="classExam.start">Noten eintragen →</button>
+                    <button id="class-exam-start" class="btn-primary is-cta w-full" style="padding: 0.875rem; font-size: 1.1rem; margin-top: 0.5rem;"><span data-i18n="classExam.start">Noten eintragen</span> <svg class="lucide lucide-arrow-right" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
                 </div>
             </div>
         </div>
@@ -3012,7 +2995,7 @@ Anna,,Schmidt</code></pre>
         <div id="class-exam-step-entry" class="hidden" style="display:none;flex-direction:column;height:100%;">
             <div class="class-exam-header">
                 <button id="class-exam-back-to-setup" class="btn-icon btn-secondary" aria-label="Zurück zur Übersicht">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
                 <div class="flex items-center gap-3 flex-1 mx-3">
                     <div class="class-exam-progress-bar">
@@ -3021,7 +3004,7 @@ Anna,,Schmidt</code></pre>
                     <span class="class-exam-progress" id="class-exam-progress-text">0 / 0</span>
                 </div>
                 <button id="class-exam-undo" class="btn-icon btn-secondary" title="Letzte Note rückgängig" disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                    <svg class="lucide lucide-corner-up-left-icon lucide-corner-up-left" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
                 </button>
             </div>
             <div class="class-exam-body" style="justify-content:center;">
@@ -3036,7 +3019,7 @@ Anna,,Schmidt</code></pre>
                 <div class="class-exam-entry-controls">
                     <button class="class-exam-absent-btn" id="class-exam-absent-btn" data-i18n="classExam.absent">Abwesend – überspringen</button>
                     <textarea id="class-exam-note" class="class-exam-note-field" rows="2" placeholder="Notiz zur Note (optional)..."></textarea>
-                    <button id="class-exam-continue-later" class="btn-outline w-full" style="margin-top:0.5rem;padding:0.6rem;" data-i18n="classExam.continueLater">Später fortsetzen (Entwurf speichern)</button>
+                    <button id="class-exam-continue-later" class="btn-outline w-full" style="margin-top:0.5rem;padding:0.6rem;"><svg class="lucide lucide-clock" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> <span data-i18n="classExam.continueLater">Später fortsetzen (Entwurf speichern)</span></button>
                 </div>
             </div>
         </div>
@@ -3045,7 +3028,7 @@ Anna,,Schmidt</code></pre>
         <div id="class-exam-step-summary" class="hidden" style="display:none;flex-direction:column;height:100%;">
             <div class="class-exam-header">
                 <button id="class-exam-back-to-entry" class="btn-icon btn-secondary" aria-label="Zurück">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    <svg class="lucide lucide-chevron-left-icon lucide-chevron-left" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
                 <h2 class="text-lg font-semibold" data-i18n="classExam.summary">Zusammenfassung</h2>
                 <div style="width:2.5rem"></div>
@@ -3053,7 +3036,7 @@ Anna,,Schmidt</code></pre>
             <div class="class-exam-body">
                 <p class="text-gray-400 text-sm" data-i18n="classExam.summaryHint">Überprüfe die Noten bevor du speicherst. Abwesende Schüler erhalten keine Note.</p>
                 <div id="class-exam-summary-list" class="card p-4"></div>
-                <button id="class-exam-save" class="btn-primary is-cta w-full" style="padding: 0.875rem; font-size: 1.1rem;" data-i18n="classExam.save">Alle Noten speichern</button>
+                <button id="class-exam-save" class="btn-primary is-cta w-full" style="padding: 0.875rem; font-size: 1.1rem;"><svg class="lucide lucide-save" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> <span data-i18n="classExam.save">Alle Noten speichern</span></button>
                 <button id="class-exam-cancel-summary" class="btn-outline w-full" data-i18n="dialog.cancel">Abbrechen</button>
             </div>
         </div>

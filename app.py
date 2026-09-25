@@ -32,6 +32,9 @@ import smtplib
 import asyncio
 import logging
 import db as db_layer
+import docs_render
+import webuntis_client
+import moodle_client
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -94,6 +97,28 @@ def _scrub_email(email: str) -> str:
 # Rate limit storage: {ip: {endpoint: [(timestamp, count)]}}
 rate_limit_storage = defaultdict(lambda: defaultdict(list))
 
+# Per-share-token failed-PIN tracking (in addition to per-IP rate limiting), so a
+# distributed brute-force with rotating IPs against one public share link still
+# hits a share-level wall. {share_token: [failure_timestamps]}
+# ponytail: in-memory, per-process; fine for single-worker. Move to the DB/Redis
+# if scaled to multiple workers.
+share_pin_failures = defaultdict(list)
+SHARE_PIN_MAX_FAILURES = 20        # per window, across all IPs
+SHARE_PIN_WINDOW_SECONDS = 900     # 15 min
+
+
+def share_pin_locked(share_token: str) -> bool:
+    """True if this share has too many recent failed PIN attempts."""
+    now = datetime.now()
+    window_start = now - timedelta(seconds=SHARE_PIN_WINDOW_SECONDS)
+    recent = [ts for ts in share_pin_failures[share_token] if ts > window_start]
+    share_pin_failures[share_token] = recent
+    return len(recent) >= SHARE_PIN_MAX_FAILURES
+
+
+def record_share_pin_failure(share_token: str) -> None:
+    share_pin_failures[share_token].append(datetime.now())
+
 # Rate limit configurations: {endpoint_pattern: (max_requests, time_window_seconds)}
 RATE_LIMITS = {
     'login': (5, 60),           # 5 attempts per minute
@@ -103,6 +128,10 @@ RATE_LIMITS = {
     'pin_verify': (5, 60),      # 5 PIN attempts per minute
     'share_manage': (20, 60),   # 20 share management requests per minute
     'password_reset': (3, 300), # 3 attempts per 5 minutes
+    'org_join': (5, 60),        # 5 join-code attempts per minute (brute-force resistance)
+    'org_manage': (20, 60),     # 20 org management requests per minute
+    'webuntis_connect': (5, 60),  # 5 WebUntis login attempts per minute (brute-force resistance)
+    'moodle_connect': (5, 60),    # 5 Moodle connect attempts per minute (brute-force resistance)
     'default': (100, 60),       # 100 requests per minute default
 }
 
@@ -112,8 +141,10 @@ RATE_LIMITS = {
 # by a TLS-terminating proxy (nginx, Caddy, Traefik).
 TRUSTED_PROXY = os.environ.get('TRUSTED_PROXY', '').lower() in ('1', 'true', 'yes')
 
-# Cookies must be Secure in production; set COOKIE_SECURE=1 (or rely on TRUSTED_PROXY)
-COOKIE_SECURE = os.environ.get('COOKIE_SECURE', '').lower() in ('1', 'true', 'yes') or TRUSTED_PROXY
+# Cookies are Secure (HTTPS-only) by default. Set COOKIE_SECURE=0 ONLY for local
+# plain-HTTP development — never in production, or the session cookie can leak
+# over cleartext HTTP.
+COOKIE_SECURE = os.environ.get('COOKIE_SECURE', '1').lower() not in ('0', 'false', 'no')
 
 def get_client_ip():
     """Get client IP from request, only trusting X-Forwarded-For behind a trusted proxy."""
@@ -493,6 +524,77 @@ async def send_password_reset_email(to_addr: str, username: str, reset_token: st
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
+
+
+async def send_org_join_request_email(to_addr: str, admin_username: str, org_name: str, requester_username: str, requester_email: str):
+    """Notify an org admin that a teacher requested to join (best-effort, non-blocking)."""
+    app_url = APP_CONFIG.get('app_url', 'http://localhost:5000').rstrip('/')
+    subject = f"EduGrade – Neue Beitrittsanfrage für {org_name}"
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem;">
+        <h2 style="margin-bottom: 0.5rem;">Neue Beitrittsanfrage</h2>
+        <p>Hallo {admin_username},</p>
+        <p><strong>{requester_username}</strong> ({requester_email}) möchte deiner Organisation <strong>{org_name}</strong> beitreten.</p>
+        <p>Bitte in den Organisation-Einstellungen bestätigen oder ablehnen.</p>
+        <hr style="border:none;border-top:1px solid #333;margin:1.5rem 0;">
+        <p style="color:#888;font-size:0.75rem;">EduGrade &mdash; <a href="{app_url}">{app_url}</a></p>
+    </div>
+    """
+    text_body = (
+        f"Neue Beitrittsanfrage\n\n"
+        f"Hallo {admin_username},\n\n"
+        f"{requester_username} ({requester_email}) möchte deiner Organisation {org_name} beitreten.\n"
+        f"Bitte in den Organisation-Einstellungen bestätigen oder ablehnen."
+    )
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
+
+
+async def send_org_approved_email(to_addr: str, username: str, org_name: str):
+    """Notify a teacher that their org join request was approved."""
+    app_url = APP_CONFIG.get('app_url', 'http://localhost:5000').rstrip('/')
+    subject = f"EduGrade – Beitritt zu {org_name} bestätigt"
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem;">
+        <h2 style="margin-bottom: 0.5rem;">Beitritt bestätigt</h2>
+        <p>Hallo {username},</p>
+        <p>dein Beitritt zur Organisation <strong>{org_name}</strong> wurde bestätigt.</p>
+        <hr style="border:none;border-top:1px solid #333;margin:1.5rem 0;">
+        <p style="color:#888;font-size:0.75rem;">EduGrade &mdash; <a href="{app_url}">{app_url}</a></p>
+    </div>
+    """
+    text_body = (
+        f"Beitritt bestätigt\n\n"
+        f"Hallo {username},\n\n"
+        f"dein Beitritt zur Organisation {org_name} wurde bestätigt."
+    )
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
+
+
+async def send_org_handover_email(to_addr: str, username: str, from_username: str, class_name: str):
+    """Notify a teacher that a class was offered to them via handover."""
+    app_url = APP_CONFIG.get('app_url', 'http://localhost:5000').rstrip('/')
+    subject = f"EduGrade – Klassenübergabe: {class_name}"
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem;">
+        <h2 style="margin-bottom: 0.5rem;">Klasse angeboten</h2>
+        <p>Hallo {username},</p>
+        <p><strong>{from_username}</strong> möchte dir die Klasse <strong>{class_name}</strong> übergeben.</p>
+        <p>Bitte in den Organisation-Einstellungen annehmen oder ablehnen.</p>
+        <hr style="border:none;border-top:1px solid #333;margin:1.5rem 0;">
+        <p style="color:#888;font-size:0.75rem;">EduGrade &mdash; <a href="{app_url}">{app_url}</a></p>
+    </div>
+    """
+    text_body = (
+        f"Klasse angeboten\n\n"
+        f"Hallo {username},\n\n"
+        f"{from_username} möchte dir die Klasse {class_name} übergeben.\n"
+        f"Bitte in den Organisation-Einstellungen annehmen oder ablehnen."
+    )
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
+
 
 def generate_recovery_key_pdf(username: str, recovery_key: str, language: str = 'de') -> bytes:
     """Generate a modern PDF document with the recovery key"""
@@ -989,6 +1091,90 @@ def update_active_shares_for_user(user_id: str, user_data: dict):
                     break
             db_layer.put_share(token, share)
 
+# ============ ORGANISATION HELPERS ============
+
+def _get_current_year(cls: dict) -> dict | None:
+    """Return the current-year sub-object of a class, or None."""
+    current_year_id = cls.get('currentYearId')
+    if current_year_id and cls.get('years'):
+        for year in cls.get('years', []):
+            if year.get('id') == current_year_id:
+                return year
+    return None
+
+
+def _current_students(cls: dict) -> list[dict]:
+    """Students of a class's current year (fallback to legacy top-level field)."""
+    current_year = _get_current_year(cls)
+    return current_year.get('students', []) if current_year else cls.get('students', [])
+
+
+def generate_org_join_code() -> str:
+    """Generate an 8-char hex join code (32 bits — brute-force resistance comes
+    from rate limiting + the admin-approval gate, not code length alone)."""
+    return secrets.token_hex(4).upper()
+
+
+def sync_org_roster_for_class(user_id: str, class_id, cls: dict, teacher_name: str):
+    """Refresh org_roster rows for one class if the owner is an approved org member."""
+    membership = db_layer.get_org_membership(user_id)
+    if not membership or membership.get('status') != 'approved':
+        return
+    names = [get_student_display_name(s) for s in _current_students(cls) if isinstance(s, dict)]
+    db_layer.replace_roster_for_class(
+        membership['org_id'], user_id, class_id, cls.get('name', ''), teacher_name,
+        names, datetime.now().isoformat()
+    )
+
+
+def sync_org_roster_for_user(user_id: str, data: dict):
+    """Refresh org_roster rows for all of a user's classes (full-sync path)."""
+    membership = db_layer.get_org_membership(user_id)
+    if not membership or membership.get('status') != 'approved':
+        return
+    db_layer.delete_roster_for_user(membership['org_id'], user_id)
+    teacher_name = data.get('teacherName', '')
+    for cls in data.get('classes', []):
+        cid = cls.get('id')
+        if cid is None:
+            continue
+        sync_org_roster_for_class(user_id, cid, cls, teacher_name)
+
+
+def build_handover_snapshot(cls: dict, categories: list, include: dict) -> dict:
+    """Build a filtered copy of a class for a handover, honoring `include` flags.
+
+    Mirrors build_share_snapshot's server-side filtering pattern: fields the
+    sender unchecked are stripped here, not left to the client to hide.
+    """
+    cls_copy = json.loads(json.dumps(cls))  # deep copy
+    current_year = _get_current_year(cls_copy)
+    students = current_year.get('students', []) if current_year else cls_copy.get('students', [])
+
+    if not include.get('students', True):
+        students = []
+    else:
+        for s in students:
+            if not isinstance(s, dict):
+                continue
+            if not include.get('grades', True):
+                s['grades'] = []
+            if not include.get('entries', True):
+                s['participation'] = []
+            if not include.get('comments', True):
+                s['notes'] = ''
+
+    if current_year is not None:
+        current_year['students'] = students
+    else:
+        cls_copy['students'] = students
+
+    return {
+        'class': cls_copy,
+        'categories': categories if include.get('categories', True) else [],
+    }
+
+
 def init_db():
     """Initialize SQLite schema via db.py."""
     db_layer.init_schema()
@@ -1065,6 +1251,9 @@ async def cleanup_expired_sessions():
 
     # Clean up expired password reset tokens
     db_layer.delete_expired_reset_tokens(now_iso)
+
+    # Clean up expired (unaccepted) class handovers
+    db_layer.delete_expired_handovers(now_iso)
 
     return None
 
@@ -1361,8 +1550,9 @@ def clear_session_cache(token: str):
 
 # ============ AUTHENTICATION FUNCTIONS ============
 
-def register_user(username: str, email: str, password: str) -> dict:
-    """Register a new user"""
+def register_user(username: str, email: str, password: str, account_type: str = 'teacher') -> dict:
+    """Register a new user. account_type is 'teacher' (default, full gradebook) or
+    'org_admin' (pure organisation-admin account, no personal gradebook)."""
     # Validate username
     username = username.strip()
     if len(username) < 3 or len(username) > 50:
@@ -1444,6 +1634,7 @@ def register_user(username: str, email: str, password: str) -> dict:
         "recovery_key_hash": hash_recovery_key(recovery_key),
         "recovery_salt": recovery_salt.hex(),
         "encrypted_dek": encrypted_dek,
+        "account_type": account_type,
         "created_at": datetime.now().isoformat()
     })
 
@@ -1665,7 +1856,8 @@ def get_user_from_token(token: str) -> dict | None:
         return {
             'id': user_info['id'],
             'username': user_info['username'],
-            'email': user_info['email']
+            'email': user_info['email'],
+            'account_type': user_info.get('account_type', 'teacher')
         }
     return None
 
@@ -1700,6 +1892,36 @@ def login_required(f):
 
     # Give the function a unique name to avoid conflicts
     decorated_function.__name__ = f"{f.__name__}_login_required"
+    return decorated_function
+
+
+def org_member_required(f):
+    """Decorator (stack after login_required) requiring an approved org membership.
+    Attaches request.org_id / request.org_role.
+    """
+    @functools.wraps(f)
+    async def decorated_function(*args, **kwargs):
+        membership = db_layer.get_org_membership(request.user['id'])  # type: ignore
+        if not membership or membership.get('status') != 'approved':
+            return jsonify({'success': False, 'message': 'backend.orgNotMember'}), 403
+        request.org_id = membership['org_id']  # type: ignore
+        request.org_role = membership['role']  # type: ignore
+        return await f(*args, **kwargs)
+    decorated_function.__name__ = f"{f.__name__}_org_member_required"
+    return decorated_function
+
+
+def org_admin_required(f):
+    """Decorator (stack after login_required) requiring org admin role."""
+    @functools.wraps(f)
+    async def decorated_function(*args, **kwargs):
+        membership = db_layer.get_org_membership(request.user['id'])  # type: ignore
+        if not membership or membership.get('status') != 'approved' or membership.get('role') != 'admin':
+            return jsonify({'success': False, 'message': 'backend.orgNotAdmin'}), 403
+        request.org_id = membership['org_id']  # type: ignore
+        request.org_role = membership['role']  # type: ignore
+        return await f(*args, **kwargs)
+    decorated_function.__name__ = f"{f.__name__}_org_admin_required"
     return decorated_function
 
 # Load version from config file
@@ -1806,12 +2028,42 @@ async def set_cache_control_headers(response):
     """
     path = request.path
     
-    if path.startswith('/static/'):
+    # HTML too: pages carry user data and the security headers below, so a
+    # disk-cached copy would keep serving a stale Content-Security-Policy.
+    if path.startswith('/static/') or response.mimetype == 'text/html':
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
 
     response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    # Content-Security-Policy. 'unsafe-inline' for script/style is a known
+    # limitation: the app relies on inline <script> blocks and onclick handlers.
+    # ponytail: unsafe-inline stays until inline handlers move to addEventListener
+    # + nonces; the other directives already block external script injection,
+    # <base> hijacking, framing and cross-origin form posts.
+    response.headers.setdefault('Content-Security-Policy', (
+        "default-src 'self'; "
+        # jsdelivr: tailwind + basecoat-css (both SRI-pinned in the templates).
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        "img-src 'self' data:; "
+        "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+        "connect-src 'self'; "
+        # Ko-fi donation widget in the support dialog.
+        "frame-src https://ko-fi.com; "
+        "object-src 'none'; "
+        "base-uri 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'"
+    ))
+    # HSTS only when serving over TLS (COOKIE_SECURE ⇒ prod/HTTPS), so plain-HTTP
+    # local dev is not forced onto HTTPS.
+    if COOKIE_SECURE:
+        response.headers.setdefault(
+            'Strict-Transport-Security', 'max-age=63072000; includeSubDomains'
+        )
 
     return response
 
@@ -1855,6 +2107,22 @@ async def terms():
 @app.route('/privacy')
 async def privacy():
     return await render_template('privacy.html', app_version=APP_VERSION)
+
+@app.route('/docs')
+@app.route('/docs/')
+@app.route('/docs/<path:slug>')
+async def docs(slug='intro'):
+    """In-app documentation (replaces the standalone Docusaurus site)."""
+    page = docs_render.render_page(slug)
+    if page is None:
+        return await render_template('docs.html',
+                                     page=docs_render.render_page('intro'),
+                                     nav=docs_render.build_nav('intro'),
+                                     app_version=APP_VERSION), 404
+    return await render_template('docs.html',
+                                 page=page,
+                                 nav=docs_render.build_nav(page['slug']),
+                                 app_version=APP_VERSION)
 
 @app.route('/service-worker.js')
 async def service_worker():
@@ -1969,6 +2237,33 @@ async def api_register():
         return jsonify({'success': False, 'message': 'backend.passwordsMismatch'}), 400
 
     result = register_user(username, email, password)
+    status_code = 200 if result['success'] else 400
+
+    return jsonify(result), status_code
+
+
+@app.route('/api/register-org', methods=['POST'])
+@rate_limit('register')
+async def api_register_org():
+    """Register a pure organisation-admin account and create its org."""
+    data = await request.get_json()
+
+    if not data:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    org_name = data.get('org_name', '')
+    username = data.get('username', '')
+    email = data.get('email', '')
+    password = data.get('password', '')
+    password_confirm = data.get('password_confirm', '')
+
+    if not all([org_name, username, email, password, password_confirm]):
+        return jsonify({'success': False, 'message': 'backend.fillAllFields'}), 400
+
+    if password != password_confirm:
+        return jsonify({'success': False, 'message': 'backend.passwordsMismatch'}), 400
+
+    result = register_org_admin(org_name, username, email, password)
     status_code = 200 if result['success'] else 400
 
     return jsonify(result), status_code
@@ -2474,6 +2769,9 @@ async def api_save_data():
         # Update any active share snapshots for this user
         update_active_shares_for_user(user_id, data)
 
+        # Refresh org roster (name + class only) if this user is an approved org member
+        sync_org_roster_for_user(user_id, data)
+
         print(f"Data successfully saved (encrypted) for user {user_id}")
         return jsonify({'success': True, 'message': 'backend.dataSaved'})
 
@@ -2607,6 +2905,10 @@ async def api_save_class(class_id):
         if user_has_active_share(user_id, class_id):
             full = get_user_data(user_id, encryption_key)
             update_active_shares_for_user(user_id, full)
+        # Refresh org roster for this class if the user is an approved org member.
+        if db_layer.get_org_membership(user_id):
+            meta = get_user_meta(user_id, encryption_key)
+            sync_org_roster_for_class(user_id, class_id, payload, meta.get('teacherName', ''))
         return jsonify({'success': True, 'message': 'backend.dataSaved'})
     except Exception as e:
         logger.error("Error saving class %s for user %s: %s", class_id, user_id, type(e).__name__)
@@ -2637,6 +2939,9 @@ async def api_delete_class(class_id):
             if meta.get('currentClassId') == class_id or str(meta.get('currentClassId')) == cid:
                 meta['currentClassId'] = None
             save_user_meta(user_id, meta, encryption_key)
+        membership = db_layer.get_org_membership(user_id)
+        if membership:
+            db_layer.delete_roster_for_class(membership['org_id'], user_id, class_id)
         return jsonify({'success': existed})
     except Exception as e:
         logger.error("Error deleting class %s for user %s: %s", class_id, user_id, type(e).__name__)
@@ -2899,6 +3204,817 @@ async def api_get_share_status(class_id):
     return jsonify({'success': True, 'has_share': False})
 
 
+# ============ Organisation API ============
+#
+# Orgs group teachers under an admin. Two deliberate, narrow exceptions to the
+# zero-knowledge model live here (see plan discussion): org_roster stores
+# student name + class only (no grades), and class handovers use the same
+# MASTER_SHARE_KEY server-decryptable pattern as class_shares.
+
+def _create_org_record(name: str, admin_user_id: str) -> dict:
+    """Create an org and make admin_user_id its approved admin.
+    Used only by the org-admin registration flow (see register_org_admin) —
+    org creation is not reachable from inside the app for existing accounts."""
+    import uuid
+    org_id = str(uuid.uuid4())[:8]
+    attempts = 0
+    while db_layer.get_org(org_id) is not None and attempts < 100:
+        org_id = str(uuid.uuid4())[:8]
+        attempts += 1
+
+    join_code = generate_org_join_code()
+    attempts = 0
+    while db_layer.get_org_by_join_code(join_code) is not None and attempts < 100:
+        join_code = generate_org_join_code()
+        attempts += 1
+
+    now = datetime.now().isoformat()
+    db_layer.create_org(org_id, name, join_code, admin_user_id, now)
+    db_layer.put_org_member(org_id, admin_user_id, 'admin', 'approved', now, now)
+
+    return {'id': org_id, 'name': name, 'join_code': join_code, 'role': 'admin', 'status': 'approved'}
+
+
+def register_org_admin(org_name: str, username: str, email: str, password: str) -> dict:
+    """Register a pure org-admin account (no personal gradebook) and create its org."""
+    org_name = org_name.strip()
+    if not org_name or len(org_name) > 100:
+        return {'success': False, 'message': 'backend.orgInvalidName', 'user_id': None}
+
+    result = register_user(username, email, password, account_type='org_admin')
+    if not result.get('success'):
+        return result
+
+    org = _create_org_record(org_name, result['user_id'])
+    result['org'] = org
+    return result
+
+
+@app.route('/api/org/join', methods=['POST'])
+@rate_limit('org_join')
+@login_required
+async def api_join_org():
+    """Request to join an org via its join code (admin approval required)."""
+    user_id = request.user['id']  # type: ignore
+    if db_layer.get_org_membership(user_id):
+        return jsonify({'success': False, 'message': 'backend.orgAlreadyMember'}), 409
+
+    data = await request.get_json()
+    join_code = ((data or {}).get('join_code') or '').strip().upper()
+    if not join_code:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    org = db_layer.get_org_by_join_code(join_code)
+    if not org:
+        return jsonify({'success': False, 'message': 'backend.orgCodeInvalid'}), 404
+
+    now = datetime.now().isoformat()
+    db_layer.put_org_member(org['id'], user_id, 'teacher', 'pending', now, None)
+
+    if smtp_is_configured():
+        admin = db_layer.get_user_by_id(org['admin_user_id'])
+        requester = db_layer.get_user_by_id(user_id)
+        if admin and requester:
+            try:
+                await send_org_join_request_email(
+                    admin['email'], admin.get('username', admin['email']), org['name'],
+                    requester.get('username', requester['email']), requester['email']
+                )
+            except Exception as e:
+                logger.warning("Failed to send org join notification: %s", type(e).__name__)
+
+    return jsonify({'success': True, 'message': 'backend.orgJoinRequested'})
+
+
+@app.route('/api/org/status', methods=['GET'])
+@login_required
+async def api_org_status():
+    """Return the current user's org membership (or none)."""
+    user_id = request.user['id']  # type: ignore
+    membership = db_layer.get_org_membership(user_id)
+    if not membership:
+        return jsonify({'success': True, 'member': False})
+
+    org = db_layer.get_org(membership['org_id'])
+    if not org:
+        return jsonify({'success': True, 'member': False})
+
+    return jsonify({
+        'success': True,
+        'member': True,
+        'role': membership['role'],
+        'status': membership['status'],
+        'org': {
+            'id': org['id'],
+            'name': org['name'],
+            'join_code': org['join_code'] if membership['role'] == 'admin' else None
+        }
+    })
+
+
+@app.route('/api/org/pending', methods=['GET'])
+@rate_limit('org_manage')
+@login_required
+@org_admin_required
+async def api_org_pending():
+    """List teachers awaiting approval into the admin's org."""
+    rows = db_layer.list_pending_members(request.org_id)  # type: ignore
+    result = []
+    for row in rows:
+        u = db_layer.get_user_by_id(row['user_id'])
+        if not u:
+            continue
+        result.append({
+            'user_id': row['user_id'],
+            'username': u.get('username', ''),
+            'email': u.get('email', ''),
+            'requested_at': row['requested_at']
+        })
+    return jsonify({'success': True, 'pending': result})
+
+
+@app.route('/api/org/members/<member_user_id>/approve', methods=['POST'])
+@rate_limit('org_manage')
+@login_required
+@org_admin_required
+async def api_org_approve_member(member_user_id):
+    """Approve a pending member of the admin's org."""
+    org_id = request.org_id  # type: ignore
+    membership = db_layer.get_org_membership(member_user_id)
+    if not membership or membership['org_id'] != org_id or membership['status'] != 'pending':
+        return jsonify({'success': False, 'message': 'backend.orgMemberNotFound'}), 404
+
+    now = datetime.now().isoformat()
+    db_layer.approve_member(org_id, member_user_id, now)
+
+    if smtp_is_configured():
+        org = db_layer.get_org(org_id)
+        u = db_layer.get_user_by_id(member_user_id)
+        if org and u:
+            try:
+                await send_org_approved_email(u['email'], u.get('username', u['email']), org['name'])
+            except Exception as e:
+                logger.warning("Failed to send org approval notification: %s", type(e).__name__)
+
+    return jsonify({'success': True, 'message': 'backend.orgMemberApproved'})
+
+
+@app.route('/api/org/members/<member_user_id>/reject', methods=['POST'])
+@rate_limit('org_manage')
+@login_required
+@org_admin_required
+async def api_org_reject_member(member_user_id):
+    """Reject a pending member (or remove an approved one) from the admin's org."""
+    org_id = request.org_id  # type: ignore
+    membership = db_layer.get_org_membership(member_user_id)
+    if not membership or membership['org_id'] != org_id:
+        return jsonify({'success': False, 'message': 'backend.orgMemberNotFound'}), 404
+
+    db_layer.remove_member(org_id, member_user_id)
+    db_layer.delete_roster_for_user(org_id, member_user_id)
+    return jsonify({'success': True, 'message': 'backend.orgMemberRejected'})
+
+
+@app.route('/api/org/leave', methods=['POST'])
+@rate_limit('org_manage')
+@login_required
+@org_member_required
+async def api_org_leave():
+    """Leave the current org. An admin can only leave if no other members remain."""
+    user_id = request.user['id']  # type: ignore
+    org_id = request.org_id  # type: ignore
+    role = request.org_role  # type: ignore
+
+    if role == 'admin' and len(db_layer.list_org_members(org_id)) > 1:
+        return jsonify({'success': False, 'message': 'backend.orgAdminCannotLeave'}), 400
+
+    db_layer.remove_member(org_id, user_id)
+    db_layer.delete_roster_for_user(org_id, user_id)
+    if role == 'admin':
+        db_layer.delete_org(org_id)
+
+    return jsonify({'success': True, 'message': 'backend.orgLeft'})
+
+
+@app.route('/api/org/members/search', methods=['GET'])
+@rate_limit('org_manage')
+@login_required
+@org_member_required
+async def api_org_members_search():
+    """Prefix-search approved org members by email, for the handover picker."""
+    q = (request.args.get('q') or '').strip().lower()
+    if len(q) < 2:
+        return jsonify({'success': True, 'results': []})
+
+    user_id = request.user['id']  # type: ignore
+    org_id = request.org_id  # type: ignore
+    results = []
+    for m in db_layer.list_org_members(org_id):
+        if m['user_id'] == user_id:
+            continue
+        u = db_layer.get_user_by_id(m['user_id'])
+        if not u or q not in u.get('email', '').lower():
+            continue
+        results.append({'user_id': u['id'], 'email': u['email'], 'username': u.get('username', '')})
+        if len(results) >= 10:
+            break
+
+    return jsonify({'success': True, 'results': results})
+
+
+@app.route('/api/org/roster', methods=['GET'])
+@rate_limit('data_read')
+@login_required
+@org_member_required
+async def api_org_roster():
+    """Return the org-wide roster: student name + class + teacher (no grades)."""
+    rows = db_layer.list_roster(request.org_id)  # type: ignore
+    return jsonify({'success': True, 'roster': rows})
+
+
+@app.route('/api/org/handover', methods=['POST'])
+@rate_limit('org_manage')
+@login_required
+@org_member_required
+async def api_create_handover():
+    """Offer a class to another org teacher, with granular include flags."""
+    user_id = request.user['id']  # type: ignore
+    org_id = request.org_id  # type: ignore
+    session_token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(session_token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    data = await request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    class_id = data.get('class_id')
+    to_user_id = data.get('to_user_id')
+    include = data.get('include') or {}
+    if not class_id or not to_user_id or to_user_id == user_id:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    target_membership = db_layer.get_org_membership(to_user_id)
+    if not target_membership or target_membership['org_id'] != org_id or target_membership['status'] != 'approved':
+        return jsonify({'success': False, 'message': 'backend.orgMemberNotFound'}), 404
+
+    cls = get_user_class(user_id, class_id, encryption_key)
+    if cls is None:
+        return jsonify({'success': False, 'message': 'backend.classNotFound'}), 404
+
+    meta = get_user_meta(user_id, encryption_key)
+    snapshot = build_handover_snapshot(cls, meta.get('categories', []), include)
+    encrypted_snapshot = encrypt_share_data(snapshot, MASTER_SHARE_KEY)
+
+    handover_token = generate_share_token()
+    now = datetime.now()
+    to_user = db_layer.get_user_by_id(to_user_id)
+    handover_data = {
+        'org_id': org_id,
+        'from_user_id': user_id,
+        'from_username': request.user.get('username', ''),  # type: ignore
+        'to_user_id': to_user_id,
+        'class_id': class_id,
+        'class_name': cls.get('name', ''),
+        'status': 'pending',
+        'include': include,
+        'encrypted_data': encrypted_snapshot,
+        'created_at': now.isoformat(),
+        'expires_at': (now + timedelta(days=7)).isoformat(),
+    }
+    db_layer.put_handover(handover_token, handover_data)
+
+    if smtp_is_configured() and to_user:
+        try:
+            await send_org_handover_email(
+                to_user['email'], to_user.get('username', to_user['email']),
+                request.user.get('username', ''), cls.get('name', '')  # type: ignore
+            )
+        except Exception as e:
+            logger.warning("Failed to send handover notification: %s", type(e).__name__)
+
+    return jsonify({'success': True, 'token': handover_token})
+
+
+@app.route('/api/org/handovers', methods=['GET'])
+@login_required
+@org_member_required
+async def api_list_handovers():
+    """List pending class handovers addressed to the current user."""
+    user_id = request.user['id']  # type: ignore
+    now = datetime.now()
+    result = []
+    for token, h in db_layer.list_handovers_for_user(user_id, 'pending'):
+        expires_at = h.get('expires_at')
+        if expires_at and datetime.fromisoformat(expires_at) < now:
+            continue
+        result.append({
+            'token': token,
+            'class_name': h.get('class_name', ''),
+            'from_username': h.get('from_username', ''),
+            'include': h.get('include', {}),
+            'created_at': h.get('created_at', ''),
+            'expires_at': expires_at,
+        })
+    return jsonify({'success': True, 'handovers': result})
+
+
+@app.route('/api/org/handover/<handover_token>/accept', methods=['POST'])
+@rate_limit('org_manage')
+@login_required
+@org_member_required
+async def api_accept_handover(handover_token):
+    """Accept a pending handover: import the class, then delete it from the sender."""
+    user_id = request.user['id']  # type: ignore
+    session_token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(session_token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    handover = db_layer.get_handover(handover_token)
+    if not handover or handover.get('to_user_id') != user_id:
+        return jsonify({'success': False, 'message': 'backend.handoverNotFound'}), 404
+    if handover.get('status') != 'pending':
+        return jsonify({'success': False, 'message': 'backend.handoverNotPending'}), 400
+
+    expires_at = handover.get('expires_at')
+    if expires_at and datetime.fromisoformat(expires_at) < datetime.now():
+        handover['status'] = 'expired'
+        db_layer.put_handover(handover_token, handover)
+        return jsonify({'success': False, 'message': 'backend.handoverExpired'}), 400
+
+    snapshot = decrypt_share_data(handover.get('encrypted_data', ''), MASTER_SHARE_KEY)
+    new_class = snapshot.get('class')
+    if not new_class:
+        return jsonify({'success': False, 'message': 'backend.error'}), 500
+
+    import uuid
+    new_class_id = str(uuid.uuid4())[:8]
+    new_class['id'] = new_class_id
+    save_user_class(user_id, new_class_id, new_class, encryption_key)
+
+    # Append to recipient's classOrder and merge any category definitions
+    # referenced by the transferred grades that the recipient doesn't have yet.
+    meta = get_user_meta(user_id, encryption_key)
+    order = meta.get('classOrder') or []
+    order.append(new_class_id)
+    meta['classOrder'] = order
+    existing_cat_ids = {c.get('id') for c in meta.get('categories', [])}
+    for cat in snapshot.get('categories', []):
+        if cat.get('id') not in existing_cat_ids:
+            meta.setdefault('categories', []).append(cat)
+            existing_cat_ids.add(cat.get('id'))
+    save_user_meta(user_id, meta, encryption_key)
+
+    # Remove the class from the sender's account (server holds no key for the
+    # sender's meta, so their classOrder may keep a dangling id — already
+    # tolerated elsewhere, see _assemble_blob_from_v2).
+    from_user_id = handover.get('from_user_id')
+    class_id = handover.get('class_id')
+    delete_user_class(from_user_id, class_id)
+    org_id = handover.get('org_id')
+    if org_id:
+        db_layer.delete_roster_for_class(org_id, from_user_id, class_id)
+
+    handover['status'] = 'accepted'
+    db_layer.put_handover(handover_token, handover)
+
+    sync_org_roster_for_class(user_id, new_class_id, new_class, meta.get('teacherName', ''))
+
+    return jsonify({'success': True, 'class_id': new_class_id})
+
+
+@app.route('/api/org/handover/<handover_token>/decline', methods=['POST'])
+@rate_limit('org_manage')
+@login_required
+@org_member_required
+async def api_decline_handover(handover_token):
+    """Decline a pending handover; the class stays with the sender."""
+    user_id = request.user['id']  # type: ignore
+    handover = db_layer.get_handover(handover_token)
+    if not handover or handover.get('to_user_id') != user_id:
+        return jsonify({'success': False, 'message': 'backend.handoverNotFound'}), 404
+    if handover.get('status') != 'pending':
+        return jsonify({'success': False, 'message': 'backend.handoverNotPending'}), 400
+
+    handover['status'] = 'declined'
+    db_layer.put_handover(handover_token, handover)
+    return jsonify({'success': True, 'message': 'backend.handoverDeclined'})
+
+
+# ============ WebUntis API ============
+#
+# Each teacher connects their own WebUntis account. Credentials are stored
+# inside the user's existing encrypted meta blob (get_user_meta/save_user_meta,
+# same AES-GCM-under-session-DEK scheme as teacherName/categories/etc.) — NOT
+# under MASTER_SHARE_KEY, so this stays true zero-knowledge: the server can
+# only read them while the teacher has an active, unlocked session, exactly
+# like every other piece of user data.
+
+def _webuntis_error_response(e: Exception):
+    """Map a webuntis_client exception to a (jsonify, status) tuple."""
+    if isinstance(e, webuntis_client.WebUntisAuthError):
+        return jsonify({'success': False, 'message': 'backend.webUntisAuthFailed'}), 401
+    if isinstance(e, webuntis_client.WebUntisConnectionError):
+        return jsonify({'success': False, 'message': 'backend.webUntisConnectionFailed'}), 502
+    return jsonify({'success': False, 'message': 'backend.webUntisError'}), 502
+
+
+@app.route('/api/webuntis/connect', methods=['POST'])
+@rate_limit('webuntis_connect')
+@login_required
+async def api_webuntis_connect():
+    """Verify a WebUntis TOTP secret and store it (encrypted) for this teacher.
+
+    Accepts either a pasted QR-code link (``{"qr": "untis://setschool?..."}``)
+    or the four fields directly (``{server, school, username, secret}``) —
+    the QR link is the primary/recommended path (see webuntis.js), the
+    manual fields are a fallback for schools where that isn't available.
+    Never a password: see webuntis_client.py's module docstring for why.
+    """
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    data = await request.get_json() or {}
+    qr = (data.get('qr') or '').strip()
+    if qr:
+        try:
+            fields = webuntis_client.parse_qr_code(qr)
+        except ValueError:
+            return jsonify({'success': False, 'message': 'backend.webUntisInvalidQr'}), 400
+        server, school, username, secret = fields['server'], fields['school'], fields['username'], fields['secret']
+    else:
+        server = (data.get('server') or '').strip()
+        school = (data.get('school') or '').strip()
+        username = (data.get('username') or '').strip()
+        secret = (data.get('secret') or '').strip()
+    if not server or not school or not username or not secret:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    client = webuntis_client.WebUntisClient(server, school)
+    try:
+        await client.login(username, secret)
+    except webuntis_client.WebUntisError as e:
+        return _webuntis_error_response(e)
+    finally:
+        await client.close()
+
+    meta = get_user_meta(user_id, encryption_key)
+    meta['webUntis'] = {'server': server, 'school': school, 'username': username, 'secret': secret}
+    save_user_meta(user_id, meta, encryption_key)
+    return jsonify({'success': True, 'message': 'backend.webUntisConnected'})
+
+
+@app.route('/api/webuntis/connect', methods=['DELETE'])
+@rate_limit('org_manage')
+@login_required
+async def api_webuntis_disconnect():
+    """Remove stored WebUntis credentials for this teacher."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    meta = get_user_meta(user_id, encryption_key)
+    meta.pop('webUntis', None)
+    save_user_meta(user_id, meta, encryption_key)
+    return jsonify({'success': True, 'message': 'backend.webUntisDisconnected'})
+
+
+@app.route('/api/webuntis/status', methods=['GET'])
+@rate_limit('data_read')
+@login_required
+async def api_webuntis_status():
+    """Whether this teacher has WebUntis connected (never returns the secret)."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    meta = get_user_meta(user_id, encryption_key)
+    wu = meta.get('webUntis')
+    if not wu:
+        return jsonify({'success': True, 'connected': False})
+    return jsonify({
+        'success': True,
+        'connected': True,
+        'server': wu.get('server', ''),
+        'school': wu.get('school', ''),
+        'username': wu.get('username', '')
+    })
+
+
+async def _get_webuntis_creds(user_id: str, encryption_key: bytes) -> dict | None:
+    meta = get_user_meta(user_id, encryption_key)
+    return meta.get('webUntis')
+
+
+@app.route('/api/webuntis/klassen', methods=['GET'])
+@rate_limit('data_read')
+@login_required
+async def api_webuntis_klassen():
+    """List classes visible to the connected WebUntis account, for import."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    wu = await _get_webuntis_creds(user_id, encryption_key)
+    if not wu:
+        return jsonify({'success': False, 'message': 'backend.webUntisNotConnected'}), 400
+
+    client = webuntis_client.WebUntisClient(wu['server'], wu['school'])
+    try:
+        await client.login(wu['username'], wu['secret'])
+        klassen = await client.get_klassen()
+    except webuntis_client.WebUntisError as e:
+        return _webuntis_error_response(e)
+    finally:
+        await client.close()
+
+    return jsonify({'success': True, 'klassen': klassen})
+
+
+@app.route('/api/webuntis/klassen/<klasse_id>/import', methods=['POST'])
+@rate_limit('data_write')
+@login_required
+async def api_webuntis_import_klasse(klasse_id):
+    """Fetch a WebUntis class's roster for the frontend to build a new class from.
+
+    Returns raw {name, students} only — the frontend builds the actual class
+    object via the same addClass()/addStudent() shape as manual creation and
+    saves it through the normal /api/data/class/<id> path, so this endpoint
+    doesn't need to duplicate the default-subjects/year-template logic.
+    """
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    data = await request.get_json()
+    class_name = ((data or {}).get('name') or '').strip()
+    if not class_name:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    wu = await _get_webuntis_creds(user_id, encryption_key)
+    if not wu:
+        return jsonify({'success': False, 'message': 'backend.webUntisNotConnected'}), 400
+
+    try:
+        klasse_id_int = int(klasse_id)
+    except ValueError:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    client = webuntis_client.WebUntisClient(wu['server'], wu['school'])
+    try:
+        await client.login(wu['username'], wu['secret'])
+        students, filtered = await client.get_students(klasse_id_int)
+    except webuntis_client.WebUntisError as e:
+        return _webuntis_error_response(e)
+    finally:
+        await client.close()
+
+    result = {'success': True, 'name': class_name, 'students': students}
+    if not filtered:
+        result['warning'] = 'backend.webUntisRosterUnfiltered'
+    return jsonify(result)
+
+
+@app.route('/api/webuntis/timetable', methods=['GET'])
+@rate_limit('data_read')
+@login_required
+async def api_webuntis_timetable():
+    """Read-only weekly timetable for the connected WebUntis account."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    wu = await _get_webuntis_creds(user_id, encryption_key)
+    if not wu:
+        return jsonify({'success': False, 'message': 'backend.webUntisNotConnected'}), 400
+
+    start = (request.args.get('start') or '').strip()
+    end = (request.args.get('end') or '').strip()
+    if not (start.isdigit() and len(start) == 8 and end.isdigit() and len(end) == 8):
+        # Default to the current week (Mon-Sun) when not specified.
+        today = datetime.now()
+        monday = today - timedelta(days=today.weekday())
+        sunday = monday + timedelta(days=6)
+        start = monday.strftime('%Y%m%d')
+        end = sunday.strftime('%Y%m%d')
+
+    client = webuntis_client.WebUntisClient(wu['server'], wu['school'])
+    try:
+        await client.login(wu['username'], wu['secret'])
+        periods = await client.get_timetable(start, end)
+    except webuntis_client.WebUntisError as e:
+        return _webuntis_error_response(e)
+    finally:
+        await client.close()
+
+    return jsonify({'success': True, 'periods': periods})
+
+
+# ============ Moodle API ============
+#
+# Auth is a per-teacher Moodle Web Service token (Moodle: Profile →
+# Preferences → "Security keys") — never a password, same principle as the
+# WebUntis integration above. Stored in the same encrypted user_meta blob,
+# under its own 'moodle' key, plus a 'moodleClassMap' dict mapping EduGrade
+# class id -> Moodle course id (kept out of the class blob itself so it
+# can't conflict with concurrent grade/roster edits).
+
+_MOODLE_REQUIRED_FUNCTIONS = {'core_enrol_get_users_courses', 'core_calendar_create_calendar_events'}
+
+
+def _moodle_error_response(e: Exception):
+    """Map a moodle_client exception to a (jsonify, status) tuple."""
+    if isinstance(e, moodle_client.MoodleAuthError):
+        return jsonify({'success': False, 'message': 'backend.moodleAuthFailed'}), 401
+    if isinstance(e, moodle_client.MoodleConnectionError):
+        return jsonify({'success': False, 'message': 'backend.moodleConnectionFailed'}), 502
+    return jsonify({'success': False, 'message': 'backend.moodleError'}), 502
+
+
+@app.route('/api/moodle/connect', methods=['POST'])
+@rate_limit('moodle_connect')
+@login_required
+async def api_moodle_connect():
+    """Verify a Moodle Web Service token and store it (encrypted) for this teacher."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    data = await request.get_json() or {}
+    url = (data.get('url') or '').strip()
+    moodle_token = (data.get('token') or '').strip()
+    if not url or not moodle_token:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    client = moodle_client.MoodleClient(url, moodle_token)
+    try:
+        info = await client.get_site_info()
+    except moodle_client.MoodleError as e:
+        return _moodle_error_response(e)
+    finally:
+        await client.close()
+
+    available = {f.get('name') for f in (info.get('functions') or [])}
+    if not _MOODLE_REQUIRED_FUNCTIONS.issubset(available):
+        return jsonify({'success': False, 'message': 'backend.moodleMissingFunctions'}), 400
+
+    meta = get_user_meta(user_id, encryption_key)
+    meta['moodle'] = {
+        'url': url, 'token': moodle_token,
+        'userid': info.get('userid'), 'fullname': info.get('fullname', ''),
+    }
+    save_user_meta(user_id, meta, encryption_key)
+    return jsonify({'success': True, 'message': 'backend.moodleConnected'})
+
+
+@app.route('/api/moodle/connect', methods=['DELETE'])
+@rate_limit('org_manage')
+@login_required
+async def api_moodle_disconnect():
+    """Remove stored Moodle credentials (and class mapping) for this teacher."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    meta = get_user_meta(user_id, encryption_key)
+    meta.pop('moodle', None)
+    meta.pop('moodleClassMap', None)
+    save_user_meta(user_id, meta, encryption_key)
+    return jsonify({'success': True, 'message': 'backend.moodleDisconnected'})
+
+
+@app.route('/api/moodle/status', methods=['GET'])
+@rate_limit('data_read')
+@login_required
+async def api_moodle_status():
+    """Whether this teacher has Moodle connected (never returns the token)."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    meta = get_user_meta(user_id, encryption_key)
+    mo = meta.get('moodle')
+    if not mo:
+        return jsonify({'success': True, 'connected': False})
+    return jsonify({'success': True, 'connected': True, 'url': mo.get('url', ''), 'fullname': mo.get('fullname', '')})
+
+
+async def _get_moodle_creds(user_id: str, encryption_key: bytes) -> dict | None:
+    meta = get_user_meta(user_id, encryption_key)
+    return meta.get('moodle')
+
+
+@app.route('/api/moodle/courses', methods=['GET'])
+@rate_limit('data_read')
+@login_required
+async def api_moodle_courses():
+    """List Moodle courses the connected teacher is enrolled in, for class mapping."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    mo = await _get_moodle_creds(user_id, encryption_key)
+    if not mo:
+        return jsonify({'success': False, 'message': 'backend.moodleNotConnected'}), 400
+
+    client = moodle_client.MoodleClient(mo['url'], mo['token'])
+    try:
+        courses = await client.get_courses(mo['userid'])
+    except moodle_client.MoodleError as e:
+        return _moodle_error_response(e)
+    finally:
+        await client.close()
+
+    return jsonify({'success': True, 'courses': courses})
+
+
+@app.route('/api/moodle/classes/<class_id>/map', methods=['POST'])
+@rate_limit('data_write')
+@login_required
+async def api_moodle_map_class(class_id):
+    """Set (or clear, with courseId: null) which Moodle course an EduGrade class maps to."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    data = await request.get_json() or {}
+    course_id = data.get('courseId')
+
+    meta = get_user_meta(user_id, encryption_key)
+    class_map = meta.get('moodleClassMap') or {}
+    if course_id is None:
+        class_map.pop(str(class_id), None)
+    else:
+        class_map[str(class_id)] = course_id
+    meta['moodleClassMap'] = class_map
+    save_user_meta(user_id, meta, encryption_key)
+    return jsonify({'success': True})
+
+
+@app.route('/api/moodle/push-event', methods=['POST'])
+@rate_limit('data_write')
+@login_required
+async def api_moodle_push_event():
+    """Push one exam/test as a course-visible calendar event to the mapped Moodle course."""
+    user_id = request.user['id']  # type: ignore
+    token = get_token_from_request()
+    encryption_key = get_encryption_key_for_session(token)
+    if not encryption_key:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+
+    data = await request.get_json() or {}
+    class_id = str(data.get('classId') or '')
+    name = (data.get('name') or '').strip()
+    timestart = data.get('timestart')
+    timeduration = data.get('timeduration') or 0
+    if not class_id or not name or not isinstance(timestart, int):
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    mo = await _get_moodle_creds(user_id, encryption_key)
+    if not mo:
+        return jsonify({'success': False, 'message': 'backend.moodleNotConnected'}), 400
+
+    meta = get_user_meta(user_id, encryption_key)
+    course_id = (meta.get('moodleClassMap') or {}).get(class_id)
+    if not course_id:
+        return jsonify({'success': False, 'message': 'backend.moodleNoCourseMapped'}), 404
+
+    client = moodle_client.MoodleClient(mo['url'], mo['token'])
+    try:
+        await client.create_course_event(course_id, name, timestart, timeduration)
+    except moodle_client.MoodleError as e:
+        return _moodle_error_response(e)
+    finally:
+        await client.close()
+
+    return jsonify({'success': True, 'message': 'backend.moodleEventCreated'})
+
+
 # ============ Public Student Access ============
 
 @app.route('/grades/<share_token>')
@@ -2920,7 +4036,8 @@ async def student_grades_page(share_token):
         token=share_token,
         error=error,
         class_name=share.get('class_name', '') if share else '',
-        teacher_name=share.get('teacher_name', '') if share else ''
+        teacher_name=share.get('teacher_name', '') if share else '',
+        app_version=APP_VERSION
     )
 
 
@@ -2948,6 +4065,15 @@ async def api_verify_pin(share_token):
     if expires_at and datetime.fromisoformat(expires_at) < datetime.now():
         return jsonify({'success': False, 'message': 'backend.accessExpired'}), 403
 
+    # Share-level brute-force lock (survives IP rotation).
+    if share_pin_locked(share_token):
+        return jsonify({
+            'success': False,
+            'message': 'backend.tooManyRequests',
+            'rate_limited': True,
+            'retry_after': SHARE_PIN_WINDOW_SECONDS
+        }), 429
+
     # Find student by PIN
     matched_student_id = None
     for student_id, student_info in share.get('students', {}).items():
@@ -2956,7 +4082,11 @@ async def api_verify_pin(share_token):
             break
 
     if not matched_student_id:
+        record_share_pin_failure(share_token)
         return jsonify({'success': False, 'message': 'backend.wrongPin'}), 401
+
+    # Correct PIN: clear the failure counter for this share.
+    share_pin_failures.pop(share_token, None)
 
     # Get student data from encrypted snapshot
     encrypted_data = share.get('encrypted_data')
@@ -3027,21 +4157,24 @@ async def api_verify_pin(share_token):
 
 
 @app.route('/api/qrcode/generate', methods=['POST'])
+@rate_limit('default')
 async def api_generate_qr():
     """Generate a QR code for a given URL"""
     if not QR_CODE_AVAILABLE:
         return jsonify({
-            'success': False, 
+            'success': False,
             'message': 'QR code library not available on this server'
         }), 500
-    
+
     try:
         data = await request.get_json()
-        
+
         if not data or 'url' not in data:
             return jsonify({'success': False, 'message': 'URL is required'}), 400
-        
+
         url = data['url']
+        if not isinstance(url, str) or len(url) > 512:
+            return jsonify({'success': False, 'message': 'Invalid URL'}), 400
         
         # Create QR code
         qr = qrcode.QRCode(

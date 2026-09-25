@@ -119,28 +119,28 @@
         if (!nav.dataset.rendered) {
             nav.innerHTML = `
                 <button type="button" class="mnav-btn" data-mnav="home" aria-label="${tr("nav.home", "Home")}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <svg class="lucide lucide-house-icon lucide-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                         <polyline points="9 22 9 12 15 12 15 22"/>
                     </svg>
                     <span>${tr("nav.home", "Home")}</span>
                 </button>
                 <button type="button" class="mnav-btn" data-mnav="classes" aria-label="${tr("nav.classes", "Klassen")}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <svg class="lucide lucide-book-icon lucide-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                         <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
                     </svg>
                     <span>${tr("nav.classes", "Klassen")}</span>
                 </button>
                 <button type="button" class="mnav-btn mnav-primary" data-mnav="quick-add" aria-label="${tr("mobile.quickAdd", "Note hinzufügen")}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" aria-hidden="true">
+                    <svg class="lucide lucide-plus-icon lucide-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" aria-hidden="true">
                         <line x1="12" y1="5" x2="12" y2="19"/>
                         <line x1="5" y1="12" x2="19" y2="12"/>
                     </svg>
                     <span>${tr("mobile.quickAdd", "Note")}</span>
                 </button>
                 <button type="button" class="mnav-btn" data-mnav="class-exam" aria-label="${tr("classExam.title", "Klassenarbeit")}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <svg class="lucide lucide-file-text-icon lucide-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                         <polyline points="14 2 14 8 20 8"/>
                         <line x1="9" y1="13" x2="15" y2="13"/>
@@ -149,7 +149,7 @@
                     <span>${tr("mobile.exam", "Exam")}</span>
                 </button>
                 <button type="button" class="mnav-btn" data-mnav="menu" aria-label="${tr("nav.menu", "Menü")}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <svg class="lucide lucide-ellipsis-icon lucide-ellipsis" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <circle cx="5" cy="12" r="1.5"/>
                         <circle cx="12" cy="12" r="1.5"/>
                         <circle cx="19" cy="12" r="1.5"/>
@@ -301,21 +301,21 @@
         sheet.setAttribute("aria-modal", "true");
         sheet.innerHTML = `
             <button type="button" data-sheet-act="settings">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <svg class="lucide lucide-settings-icon lucide-settings" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
                     <circle cx="12" cy="12" r="3"/>
                 </svg>
                 <span>${tr("nav.settings", "Notengebung")}</span>
             </button>
             <button type="button" data-sheet-act="profile">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <svg class="lucide lucide-user-icon lucide-user" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
                     <circle cx="12" cy="7" r="4"/>
                 </svg>
                 <span>${tr("nav.profile", "Profil & Darstellung")}</span>
             </button>
             <button type="button" data-sheet-act="export">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <svg class="lucide lucide-download-icon lucide-download" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <path d="M7 10l5 5 5-5"/>
                     <path d="M12 15V3"/>
@@ -323,21 +323,30 @@
                 <span>${tr("nav.export", "Export")}</span>
             </button>
             <button type="button" data-sheet-act="theme">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <svg class="lucide lucide-moon-icon lucide-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
                 </svg>
                 <span>${tr("nav.toggleTheme", "Theme wechseln")}</span>
             </button>
             <a href="/about.html" data-sheet-act="about">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <svg class="lucide lucide-info-icon lucide-info" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <circle cx="12" cy="12" r="10"/>
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-4M12 8h.01"/>
                 </svg>
                 <span>${tr("nav.about", "Über")}</span>
             </a>
+            <button type="button" data-sheet-act="support">
+                <svg class="lucide lucide-coffee-icon lucide-coffee" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10 2v2"/>
+                    <path d="M14 2v2"/>
+                    <path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/>
+                    <path d="M6 2v2"/>
+                </svg>
+                <span>${tr("nav.support", "Unterstütze uns")}</span>
+            </button>
             <hr/>
             <button type="button" data-sheet-act="logout" style="color: var(--destructive, #ef4444);">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <svg class="lucide lucide-log-out-icon lucide-log-out" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                     <polyline points="16 17 21 12 16 7"/>
                     <line x1="21" y1="12" x2="9" y2="12"/>
@@ -372,6 +381,7 @@
                 case "profile":  { const b = document.getElementById("profile-btn"); if (b) b.click(); break; }
                 case "export":   { const b = document.getElementById("export-data"); if (b) b.click(); break; }
                 case "theme":    document.dispatchEvent(new CustomEvent("basecoat:theme")); break;
+                case "support":  { const b = document.getElementById("support-btn"); if (b) b.click(); break; }
                 case "logout":   { const b = document.getElementById("logout-btn"); if (b) b.click(); break; }
                 case "about":    /* anchor handles navigation */ break;
             }

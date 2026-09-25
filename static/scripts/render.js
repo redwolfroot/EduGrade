@@ -175,7 +175,7 @@ const _applyHomeSearch = (query) => {
     if (studentMatches.length === 0) { resultsEl.innerHTML = ''; resultsEl.classList.add('hidden'); return; }
 
     resultsEl.classList.remove('hidden');
-    const chevron = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
+    const chevron = `<svg class="lucide lucide-chevron-right-icon lucide-chevron-right" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
     resultsEl.innerHTML = `
         <p class="text-sm font-medium mb-2" style="opacity:0.5;">${t('search.studentsSection')}</p>
         <div class="space-y-2">
@@ -232,7 +232,9 @@ const _promptEditClass = (classId) => {
         </div>
     `;
     showDialog("edit-dialog", t("class.editClass"), content, (formData) => {
-        editClass(classId, formData.get("name"), formData.has("attendanceEnabled"));
+        if (editClass(classId, formData.get("name"), formData.has("attendanceEnabled"))) {
+            flashRenameSuccessIcon(document.querySelector(`[data-edit-class="${classId}"]`));
+        }
     });
 };
 
@@ -254,7 +256,10 @@ const _promptDeleteClass = (classId) => {
         • ${totalGrades} ${t('confirm.grades') || 'Noten'}<br><br>
         ${t('confirm.allDataDeleted') || 'Alle Daten dieser Klasse werden unwiderruflich gelöscht.'}`;
     const warning = t('confirm.cannotBeUndone') || 'Diese Aktion kann nicht rückgängig gemacht werden.';
-    showConfirmDialog(message, () => { deleteClass(classId); }, details, warning);
+    showConfirmDialog(message, () => {
+        const row = document.querySelector(`[data-delete-class="${classId}"]`)?.closest('#class-list > div');
+        animateOutThenRun(row, 'row-removing', () => { deleteClass(classId); });
+    }, details, warning);
 };
 
 const renderClassList = () => {
@@ -298,7 +303,7 @@ const renderClassList = () => {
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
             appData.currentClassId = btn.dataset.classId;
-            saveData(t("toast.classSelected"), "success");
+            saveData(""); // Klassenwechsel ist Navigation, kein Erfolg - kein Popup nötig
             showClassView();
         });
     });
@@ -501,7 +506,7 @@ const renderSemesterSelector = () => {
             <button class="${activeSemester === 'WS' ? 'btn-sm-primary' : 'btn-sm-outline'}" id="semester-ws-btn">${t("semester.WS")}</button>
             <button class="${activeSemester === 'SS' ? 'btn-sm-primary' : 'btn-sm-outline'}" id="semester-ss-btn">${t("semester.SS")}</button>
         </div>
-        ${noDates ? `<button class="btn-sm-outline" id="semester-set-dates-btn" style="font-size:0.75rem;opacity:0.7;">⚠ ${t("year.setDates")}</button>` : ''}
+        ${noDates ? `<button class="btn-sm-outline" id="semester-set-dates-btn" style="font-size:0.75rem;opacity:0.7;">${lucideIcon('triangle-alert')} ${t("year.setDates")}</button>` : ''}
     `;
 
     document.getElementById("semester-ws-btn")?.addEventListener("click", () => {
@@ -565,109 +570,259 @@ const renderSemesterSelector = () => {
 };
 
 /**
- * JAHR HINZUFÜGEN DIALOG
+ * Nächsten Klassennamen ableiten (führende Zahl +1), z.B. "2AFIT" -> "3AFIT".
+ * Gibt null zurück wenn kein Zahlenmuster erkennbar ist.
+ */
+const deriveNextClassName = (name) => {
+    const m = name.match(/^(\d+)(.*)$/);
+    if (!m) return null;
+    return `${parseInt(m[1], 10) + 1}${m[2]}`;
+};
+
+/**
+ * JAHR HINZUFÜGEN WIZARD
  *
- * Zeigt Dialog zum Erstellen eines neuen Jahrgangs mit Option zum Kopieren.
+ * 3 Schritte: Jahr festlegen -> Klasse umbenennen (z.B. 2AFIT -> 3AFIT) ->
+ * Schülerliste (abwählbar + neue Schüler hinzufügen).
  */
 const showAddYearDialog = (classId) => {
     const cls = appData.classes.find(c => c.id === classId);
     if (!cls) return;
 
-    const currentYear = getCurrentSchoolYear();
+    const dialog = document.getElementById("edit-dialog");
+    const form = dialog.querySelector("form");
+    const submitBtn = dialog.querySelector('footer button[type="submit"]');
+    const setStepContent = (title, contentHtml) => {
+        // Swap synchronously (callers bind elements/onsubmit right after calling
+        // this) — only the entrance is animated, deferring the swap broke
+        // callers that query the new DOM immediately after this returns.
+        dialog.querySelector("h2").textContent = title;
+        form.classList.remove('wizard-step-in');
+        form.innerHTML = contentHtml;
+        void form.offsetWidth; // restart animation
+        form.classList.add('wizard-step-in');
+        form.addEventListener('animationend', () => form.classList.remove('wizard-step-in'), { once: true });
+    };
 
-    // Get previous year for copy option
-    const sortedYears = [...cls.years].sort((a, b) =>
-        b.name.localeCompare(a.name)
-    );
+    const sortedYears = [...cls.years].sort((a, b) => b.name.localeCompare(a.name));
     const previousYear = sortedYears.length > 0 ? sortedYears[0] : null;
 
-    const defaultStart = `${currentYear}-09-01`;
-    const defaultSwitch = `${currentYear + 1}-02-01`;
-    const defaultEnd = `${currentYear + 1}-06-30`;
+    const wizardState = { yearName: null, dates: null, newClassName: cls.name };
 
-    const content = `
-        <div class="flex items-center justify-center gap-4 my-2">
-            <button type="button" id="year-dec-btn" class="btn-outline" style="padding:0.25rem 0.75rem;font-size:1.25rem;line-height:1" tabindex="-1">−</button>
-            <div class="text-center" style="min-width:9rem">
-                <div id="year-display" class="font-bold" style="font-size:1.75rem;line-height:1.2">${currentYear}</div>
-                <div id="year-name-preview" class="text-sm" style="color:var(--muted-foreground)">${currentYear}/${currentYear + 1}</div>
+    // ---------- Schritt 1: Jahr ----------
+    const renderStep1 = () => {
+        const currentYear = getCurrentSchoolYear();
+        const defaultStart = `${currentYear}-09-01`;
+        const defaultSwitch = `${currentYear + 1}-02-01`;
+        const defaultEnd = `${currentYear + 1}-06-30`;
+
+        const content = `
+            <div class="flex items-center justify-center gap-4 my-2">
+                <button type="button" id="year-dec-btn" class="btn-outline" style="padding:0.25rem 0.75rem;font-size:1.25rem;line-height:1" tabindex="-1">−</button>
+                <div class="text-center" style="min-width:9rem">
+                    <div id="year-display" class="font-bold" style="font-size:1.75rem;line-height:1.2">${currentYear}</div>
+                    <div id="year-name-preview" class="text-sm" style="color:var(--muted-foreground)">${currentYear}/${currentYear + 1}</div>
+                </div>
+                <button type="button" id="year-inc-btn" class="btn-outline" style="padding:0.25rem 0.75rem;font-size:1.25rem;line-height:1" tabindex="-1">+</button>
+                <input type="hidden" name="startYear" id="year-start-input" value="${currentYear}">
             </div>
-            <button type="button" id="year-inc-btn" class="btn-outline" style="padding:0.25rem 0.75rem;font-size:1.25rem;line-height:1" tabindex="-1">+</button>
-            <input type="hidden" name="startYear" id="year-start-input" value="${currentYear}">
-        </div>
-        <div class="grid gap-2 mt-3">
-            <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" name="useSchoolYearFormat" id="use-school-year-format" class="checkbox" checked>
-                <span>${t("year.useSchoolYearFormat")}</span>
-            </label>
-            <p class="text-gray-400 text-sm">${t("year.schoolYearFormatHint")}</p>
-        </div>
-        <hr style="border-color:var(--border);margin:0.75rem 0;">
-        <p class="text-gray-400 text-sm mb-2">${t("year.datesHint")}</p>
-        <div class="grid grid-cols-1 gap-3">
-            <div>
-                <label class="block text-sm mb-1">${t("year.startDate")}</label>
-                <input type="date" name="startDate" class="input w-full" value="${defaultStart}" id="year-add-start-date">
-            </div>
-            <div>
-                <label class="block text-sm mb-1">${t("year.semesterSwitchDate")}</label>
-                <input type="date" name="semesterSwitchDate" class="input w-full" value="${defaultSwitch}" id="year-add-switch-date">
-            </div>
-            <div>
-                <label class="block text-sm mb-1">${t("year.endDate")}</label>
-                <input type="date" name="endDate" class="input w-full" value="${defaultEnd}" id="year-add-end-date">
-            </div>
-        </div>
-        ${previousYear ? `
             <div class="grid gap-2 mt-3">
                 <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" name="copyFromPrevious" id="copy-from-previous" class="checkbox" checked>
-                    <span>${t("year.copyFromPrevious").replace('{name}', escapeHtml(previousYear.name))}</span>
+                    <input type="checkbox" name="useSchoolYearFormat" id="use-school-year-format" class="checkbox" checked>
+                    <span>${t("year.useSchoolYearFormat")}</span>
                 </label>
-                <p class="text-gray-400 text-sm">${t("year.copyHint")}</p>
+                <p class="text-gray-400 text-sm">${t("year.schoolYearFormatHint")}</p>
             </div>
-        ` : ''}
-    `;
+            <hr style="border-color:var(--border);margin:0.75rem 0;">
+            <p class="text-gray-400 text-sm mb-2">${t("year.datesHint")}</p>
+            <div class="grid grid-cols-1 gap-3">
+                <div>
+                    <label class="block text-sm mb-1">${t("year.startDate")}</label>
+                    <input type="date" name="startDate" class="input w-full" value="${defaultStart}" id="year-add-start-date">
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">${t("year.semesterSwitchDate")}</label>
+                    <input type="date" name="semesterSwitchDate" class="input w-full" value="${defaultSwitch}" id="year-add-switch-date">
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">${t("year.endDate")}</label>
+                    <input type="date" name="endDate" class="input w-full" value="${defaultEnd}" id="year-add-end-date">
+                </div>
+            </div>
+        `;
 
-    showDialog("edit-dialog", t("year.addYear"), content, (formData) => {
-        const startYear = parseInt(formData.get("startYear"));
-        const useSchoolYearFormat = formData.get("useSchoolYearFormat") === "on";
-        const yearName = useSchoolYearFormat ? `${startYear}/${startYear + 1}` : `${startYear}`;
+        showDialog("edit-dialog", t("year.wizard.step1Title"), content, (formData) => {
+            const startYear = parseInt(formData.get("startYear"));
+            const useSchoolYearFormat = formData.get("useSchoolYearFormat") === "on";
+            wizardState.yearName = useSchoolYearFormat ? `${startYear}/${startYear + 1}` : `${startYear}`;
+            wizardState.dates = {
+                startDate: formData.get("startDate") || null,
+                semesterSwitchDate: formData.get("semesterSwitchDate") || null,
+                endDate: formData.get("endDate") || null
+            };
+            renderStep2();
+            return false; // Dialog offen halten, Schritte werden manuell gewechselt
+        });
+        if (submitBtn) submitBtn.textContent = t("dialog.next");
 
-        const copyFromPreviousId = formData.get("copyFromPrevious") === "on" && previousYear
-            ? previousYear.id
-            : null;
-
-        const dates = {
-            startDate: formData.get("startDate") || null,
-            semesterSwitchDate: formData.get("semesterSwitchDate") || null,
-            endDate: formData.get("endDate") || null
+        const updateYearUI = () => {
+            const y = parseInt(document.getElementById("year-start-input").value);
+            const useFmt = document.getElementById("use-school-year-format").checked;
+            document.getElementById("year-display").textContent = y;
+            document.getElementById("year-name-preview").textContent = useFmt ? `${y}/${y + 1}` : `${y}`;
+            document.getElementById("year-add-start-date").value  = `${y}-09-01`;
+            document.getElementById("year-add-switch-date").value = `${y + 1}-02-01`;
+            document.getElementById("year-add-end-date").value    = `${y + 1}-06-30`;
         };
-
-        addYear(classId, yearName, copyFromPreviousId, dates);
-    });
-
-    // Wire stepper + live date update after dialog is in DOM
-    const updateYearUI = () => {
-        const y = parseInt(document.getElementById("year-start-input").value);
-        const useFmt = document.getElementById("use-school-year-format").checked;
-        document.getElementById("year-display").textContent = y;
-        document.getElementById("year-name-preview").textContent = useFmt ? `${y}/${y + 1}` : `${y}`;
-        document.getElementById("year-add-start-date").value  = `${y}-09-01`;
-        document.getElementById("year-add-switch-date").value = `${y + 1}-02-01`;
-        document.getElementById("year-add-end-date").value    = `${y + 1}-06-30`;
+        document.getElementById("year-dec-btn")?.addEventListener("click", () => {
+            const inp = document.getElementById("year-start-input");
+            inp.value = parseInt(inp.value) - 1;
+            updateYearUI();
+        });
+        document.getElementById("year-inc-btn")?.addEventListener("click", () => {
+            const inp = document.getElementById("year-start-input");
+            inp.value = parseInt(inp.value) + 1;
+            updateYearUI();
+        });
+        document.getElementById("use-school-year-format")?.addEventListener("change", updateYearUI);
     };
-    document.getElementById("year-dec-btn")?.addEventListener("click", () => {
-        const inp = document.getElementById("year-start-input");
-        inp.value = parseInt(inp.value) - 1;
-        updateYearUI();
-    });
-    document.getElementById("year-inc-btn")?.addEventListener("click", () => {
-        const inp = document.getElementById("year-start-input");
-        inp.value = parseInt(inp.value) + 1;
-        updateYearUI();
-    });
-    document.getElementById("use-school-year-format")?.addEventListener("change", updateYearUI);
+
+    // ---------- Schritt 2: Klasse umbenennen ----------
+    const renderStep2 = () => {
+        const suggested = deriveNextClassName(cls.name);
+        const skipByDefault = suggested === null;
+
+        const content = `
+            <p class="text-sm mb-3" style="color:var(--muted-foreground)">${t("year.wizard.step2Hint")}</p>
+            <div class="grid gap-2">
+                <label class="block mb-1">${t("class.newClassName")}</label>
+                <input type="text" id="wizard-class-name" class="input w-full" value="${escapeHtml(suggested || cls.name)}" maxlength="50" ${skipByDefault ? 'disabled' : ''} data-icon="users">
+            </div>
+            <p id="wizard-rename-preview" class="text-sm mt-2" style="color:var(--muted-foreground)"></p>
+            <label class="flex items-center gap-2 mt-3 cursor-pointer">
+                <input type="checkbox" id="wizard-skip-rename" class="checkbox" ${skipByDefault ? 'checked' : ''}>
+                <span>${t("class.keepNameCheckbox")}</span>
+            </label>
+        `;
+        setStepContent(t("year.wizard.step2Title"), content);
+        if (submitBtn) submitBtn.textContent = t("dialog.next");
+
+        const nameInput = document.getElementById("wizard-class-name");
+        const skipCheckbox = document.getElementById("wizard-skip-rename");
+        const preview = document.getElementById("wizard-rename-preview");
+
+        const updatePreview = () => {
+            nameInput.disabled = skipCheckbox.checked;
+            const target = skipCheckbox.checked ? cls.name : (nameInput.value || cls.name);
+            const newText = target === cls.name ? "" : t("class.renamePreview", { from: cls.name, to: target });
+            if (newText === preview.textContent) return;
+            preview.textContent = newText;
+            preview.classList.remove('wizard-preview-update');
+            void preview.offsetWidth;
+            preview.classList.add('wizard-preview-update');
+        };
+        nameInput.addEventListener("input", updatePreview);
+        skipCheckbox.addEventListener("change", updatePreview);
+        updatePreview();
+
+        form.onsubmit = (e) => {
+            e.preventDefault();
+            if (skipCheckbox.checked) {
+                wizardState.newClassName = cls.name;
+                renderStep3();
+                return;
+            }
+            const validation = validateStringInput(nameInput.value, 50);
+            if (!validation.isValid) {
+                showAlertDialog(validation.error);
+                return;
+            }
+            wizardState.newClassName = validation.value;
+            renderStep3();
+        };
+    };
+
+    // ---------- Schritt 3: Schülerliste ----------
+    const renderStep3 = () => {
+        const students = previousYear ? previousYear.students : [];
+
+        const studentRows = students.map(s => {
+            const displayName = [s.firstName, s.middleName, s.lastName].filter(Boolean).join(' ');
+            return `
+                <label class="flex items-center gap-2 cursor-pointer wizard-student-row" data-student-row="${safeAttr(s.id)}">
+                    <input type="checkbox" data-keep-student="${safeAttr(s.id)}" class="checkbox wizard-keep-checkbox" checked>
+                    <span class="wizard-student-name">${escapeHtml(displayName)}</span>
+                    <span class="wizard-leaving-tag text-sm hidden" style="color:var(--muted-foreground)">${t("year.wizard.studentLeaving")}</span>
+                </label>
+            `;
+        }).join('');
+
+        const content = `
+            ${students.length > 0 ? `
+                <p class="text-sm mb-2" style="color:var(--muted-foreground)">${t("year.wizard.keepStudentHint")}</p>
+                <div class="grid gap-1 mb-3" style="max-height:12rem;overflow-y:auto;">${studentRows}</div>
+                <hr style="border-color:var(--border);margin:0.75rem 0;">
+            ` : ''}
+            <p class="text-sm font-medium mb-2">${t("year.wizard.addNewStudents")}</p>
+            <div id="wizard-new-student-rows" class="grid gap-2"></div>
+            <button type="button" id="wizard-add-student-row" class="btn-sm-outline mt-2">${lucideIcon('plus')} ${t("year.wizard.addStudentRow")}</button>
+        `;
+        setStepContent(t("year.wizard.step3Title"), content);
+        if (submitBtn) submitBtn.textContent = t("year.addYear");
+
+        dialog.querySelectorAll(".wizard-keep-checkbox").forEach(cb => {
+            cb.addEventListener("change", () => {
+                const row = cb.closest(".wizard-student-row");
+                row.querySelector(".wizard-student-name").style.textDecoration = cb.checked ? "" : "line-through";
+                row.querySelector(".wizard-leaving-tag").classList.toggle("hidden", cb.checked);
+            });
+        });
+
+        const rowsContainer = document.getElementById("wizard-new-student-rows");
+        const addStudentRow = () => {
+            const row = document.createElement("div");
+            row.className = "grid gap-2 items-center wizard-new-student-row";
+            row.style.gridTemplateColumns = "1fr 1fr 1fr auto";
+            row.innerHTML = `
+                <input type="text" class="input" placeholder="${t('student.firstName')}" data-field="firstName" maxlength="50">
+                <input type="text" class="input" placeholder="${t('student.middleName')}" data-field="middleName" maxlength="50">
+                <input type="text" class="input" placeholder="${t('student.lastName')}" data-field="lastName" maxlength="50">
+                <button type="button" class="btn-icon btn-secondary" data-remove-row title="${t('dialog.remove')}">
+                    <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            `;
+            row.querySelector("[data-remove-row]").addEventListener("click", () => row.remove());
+            rowsContainer.appendChild(row);
+        };
+        document.getElementById("wizard-add-student-row")?.addEventListener("click", addStudentRow);
+        addStudentRow();
+
+        form.onsubmit = (e) => {
+            e.preventDefault();
+
+            const keepStudentIds = students
+                .filter(s => dialog.querySelector(`[data-keep-student="${CSS.escape(s.id)}"]`)?.checked)
+                .map(s => s.id);
+
+            addYear(classId, wizardState.yearName, previousYear ? previousYear.id : null, wizardState.dates, keepStudentIds);
+
+            // Neue Schüler anlegen - currentYearId zeigt nach addYear() bereits auf den neuen Jahrgang
+            dialog.querySelectorAll(".wizard-new-student-row").forEach(row => {
+                const firstName = row.querySelector('[data-field="firstName"]')?.value.trim();
+                const lastName = row.querySelector('[data-field="lastName"]')?.value.trim();
+                const middleName = row.querySelector('[data-field="middleName"]')?.value.trim();
+                if (firstName && lastName) addStudent(firstName, lastName, middleName);
+            });
+
+            if (wizardState.newClassName !== cls.name) {
+                editClass(classId, wizardState.newClassName);
+            }
+
+            closeDialogAnimated(dialog);
+        };
+    };
+
+    renderStep1();
 };
 
 /**
@@ -690,13 +845,13 @@ const showManageYearsDialog = (classId) => {
                     <span>${escapeHtml(year.name)} ${year.id === cls.currentYearId ? '(aktiv)' : ''}</span>
                     <div role="group" class="button-group">
                         <button class="btn-sm-icon-outline" data-edit-year="${safeAttr(year.id)}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg class="lucide lucide-square-pen-icon lucide-square-pen" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                             </svg>
                         </button>
                         <button class="btn-sm-icon-destructive" data-delete-year="${safeAttr(year.id)}" ${cls.years.length <= 1 ? 'disabled' : ''}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg class="lucide lucide-trash-icon lucide-trash" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                             </svg>
                         </button>
@@ -870,20 +1025,20 @@ const renderSubjectTabs = () => {
                         <div class="flex flex-wrap gap-1" id="subject-chips-container">
                             ${chipsHtml}
                             <button type="button" id="add-chip-btn" class="btn-sm-icon-outline" title="${t("subject.addChipTooltip")}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16m8-8H4"/></svg>
+                                <svg class="lucide lucide-plus-icon lucide-plus" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16m8-8H4"/></svg>
                             </button>
                         </div>
                         <div id="new-chip-row" class="hidden flex gap-1 mt-2">
-                            <input type="text" id="new-chip-input" class="input flex-1" placeholder="${t("subject.newChipPlaceholder")}" maxlength="50">
+                            <input type="text" id="new-chip-input" class="input flex-1" placeholder="${t("subject.newChipPlaceholder")}" maxlength="50" data-icon="book-open">
                             <button type="button" id="confirm-new-chip" class="btn-sm-primary">OK</button>
-                            <button type="button" id="cancel-new-chip" class="btn-sm-outline">✕</button>
+                            <button type="button" id="cancel-new-chip" class="btn-sm-outline" aria-label="${t('dialog.cancel')}">${lucideIcon('x')} </button>
                         </div>
                         <p class="text-gray-400 text-sm mt-2">${t("subject.chipsHint")}</p>
                     </div>
                     <hr>
                     <div>
                         <label class="block mb-1 text-sm font-medium">${t("subject.subjectName")}</label>
-                        <input type="text" name="name" id="subject-name-input" class="input w-full" required maxlength="50" placeholder="${t("subject.subjectPlaceholder")}">
+                        <input type="text" name="name" id="subject-name-input" class="input w-full" required maxlength="50" placeholder="${t("subject.subjectPlaceholder")}" data-icon="book-open">
                         <p class="text-gray-400 text-sm mt-1">${t("subject.nameShareHint")}</p>
                     </div>
                     <div>
@@ -1277,14 +1432,14 @@ const openAddGradeDialog = (studentId, onSuccess) => {
         </nav>
         <div role="tabpanel" id="panel-grade-direct" aria-labelledby="tab-grade-direct" tabindex="-1" aria-selected="true">
           <div class="pt-3">
-            <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input" placeholder="1-6">
+            <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input" placeholder="1-6" data-icon="hash">
             <p class="text-gray-400 text-sm mt-2">${t("grade.enterGrade")}</p>
           </div>
         </div>
         <div role="tabpanel" id="panel-grade-percent" aria-labelledby="tab-grade-percent" tabindex="-1" aria-selected="false" hidden>
           <div class="pt-3">
             <div class="flex items-center gap-2">
-              <input type="number" id="grade-percent-input" step="0.1" min="0" max="100" class="input flex-1" placeholder="0-100">
+              <input type="number" id="grade-percent-input" step="0.1" min="0" max="100" class="input flex-1" placeholder="0-100" data-icon="percent">
               <span>%</span>
             </div>
             <p class="text-gray-400 text-sm mt-2">${t("grade.enterPercentage")}</p>
@@ -1309,7 +1464,7 @@ const openAddGradeDialog = (studentId, onSuccess) => {
         <div class="flex gap-2">
           <input type="text" name="name" class="input flex-1" placeholder="${t("grade.gradeNamePlaceholder")}">
           ${hasGradeNames ? `<button type="button" id="grade-name-dropdown-btn" class="btn-outline" style="padding: 0.4rem 0.5rem; display: flex; align-items: center;" title="${t("grade.previousNames")}">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <svg class="lucide lucide-chevron-down-icon lucide-chevron-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>` : ''}
         </div>
         ${hasGradeNames ? `<div id="grade-name-dropdown" class="hidden absolute z-50 mt-1 w-full rounded-lg shadow-lg overflow-auto" style="max-height: 200px; background: var(--card, #1e1e2e); border: 1px solid var(--border, #2d2d3d);">
@@ -1320,7 +1475,7 @@ const openAddGradeDialog = (studentId, onSuccess) => {
     </div>
     ${!isPrimarySchool ? `<div class="grid gap-2">
       <label class="block mb-2">${t("grade.category")}</label>
-      <select name="categoryId" id="grade-category-select" class="select w-full" required>
+      <select name="categoryId" id="grade-category-select" class="select w-full" required data-icon="tag">
         ${categoryOptions}
       </select>
       <p class="text-gray-400 text-sm">${t("grade.categoryHint")}</p>
@@ -1498,14 +1653,14 @@ const openAddGradeDialog = (studentId, onSuccess) => {
                   </nav>
                   <div role="tabpanel" id="panel-grade-direct" aria-labelledby="tab-grade-direct" tabindex="-1" aria-selected="true">
                     <div class="pt-3">
-                      <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input" placeholder="1-6">
+                      <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input" placeholder="1-6" data-icon="hash">
                       <p class="text-gray-400 text-sm mt-2">${t("grade.enterGrade")}</p>
                     </div>
                   </div>
                   <div role="tabpanel" id="panel-grade-percent" aria-labelledby="tab-grade-percent" tabindex="-1" aria-selected="false" hidden>
                     <div class="pt-3">
                       <div class="flex items-center gap-2">
-                        <input type="number" id="grade-percent-input" step="0.1" min="0" max="100" class="input flex-1" placeholder="0-100">
+                        <input type="number" id="grade-percent-input" step="0.1" min="0" max="100" class="input flex-1" placeholder="0-100" data-icon="percent">
                         <span>%</span>
                       </div>
                       <p class="text-gray-400 text-sm mt-2">${t("grade.enterPercentage")}</p>
@@ -1688,7 +1843,7 @@ const renderStudents = () => {
 
     // Empty State anzeigen wenn keine Schüler vorhanden
     if (filteredStudents.length === 0) {
-        const icon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        const icon = `<svg class="lucide lucide-users-icon lucide-users" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
             <circle cx="9" cy="7" r="4" />
             <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
@@ -1767,12 +1922,12 @@ const renderStudents = () => {
             let attendanceWarningText = '';
             if (attendanceStatus.status === 'critical') {
               attendanceWarningText = `<span class="text-xs text-red-600 dark:text-red-400" title="${t('attendance.criticalWarning')}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline lucide lucide-circle-alert-icon lucide-circle-alert"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 ${t('attendance.atLimitWarning') || 'Am Limit'} (${attendanceStatus.rate}%)
               </span>`;
             } else if (attendanceStatus.status === 'warning') {
               attendanceWarningText = `<span class="text-xs text-orange-600 dark:text-orange-400" title="${t('attendance.lowWarning')}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline lucide lucide-triangle-alert-icon lucide-triangle-alert"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                 ${t('attendance.nearLimit') || 'Knapp am Limit'} (${attendanceStatus.rate}%)
               </span>`;
             }
@@ -1780,7 +1935,7 @@ const renderStudents = () => {
             // Trend badge for declining students
             const trend = calculateTrend(filteredGrades);
             const trendBadge = trend.trend === 'declining'
-                ? `<span class="trend-badge declining" title="${t('student.declining') || 'Absteigend'}">▼</span>`
+                ? `<span class="trend-badge declining" title="${t('student.declining') || 'Absteigend'}">${lucideIcon('trending-down')}</span>`
                 : '';
 
             return `
@@ -1826,7 +1981,7 @@ const renderStudents = () => {
             </tr>
           `;
         }).join("");
-    //<button class="btn-icon btn-secondary mr-1" data-print-student="${safeAttr(student.id)}" data-tooltip="${t("student.print")}" data-side="top"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg></button>
+    //<button class="btn-icon btn-secondary mr-1" data-print-student="${safeAttr(student.id)}" data-tooltip="${t("student.print")}" data-side="top"><svg class="lucide lucide-printer-icon lucide-printer" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg></button>
                 
     // Entire row → quick sidebar; skip clicks on checkbox/action cells
     document.querySelectorAll(".student-row").forEach(row => {
@@ -1890,6 +2045,7 @@ const renderStudents = () => {
                     student.notes = rawNotes.slice(0, 2000);
                     saveData(t("toast.studentEdited"), "success");
                     renderStudents();
+                    flashRenameSuccessIcon(document.querySelector(`[data-edit-student="${studentId}"]`));
                 });
             }
         });
@@ -1909,18 +2065,21 @@ const renderStudents = () => {
                 const warning = t('confirm.cannotBeUndone') || 'Diese Aktion kann nicht rückgängig gemacht werden.';
 
                 showConfirmDialog(message, () => {
-                    deleteItem("student", studentId);
-                    saveData(t("toast.studentDeleted"), "success");
-                    renderStudents();
+                    const row = document.querySelector(`tr[data-open-qsb="${studentId}"]`);
+                    animateOutThenRun(row, 'row-removing', () => {
+                        deleteItem("student", studentId);
+                        saveData(t("toast.studentDeleted"), "success");
+                        renderStudents();
+                    });
                 }, details, warning);
             }
         });
     });
 
     // Sort headers: attach click listeners and update active state
-    const _SVG_UPDOWN = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>`;
-    const _SVG_UP    = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`;
-    const _SVG_DOWN  = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>`;
+    const _SVG_UPDOWN = `<svg class="lucide lucide-arrow-up-down-icon lucide-arrow-up-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>`;
+    const _SVG_UP    = `<svg class="lucide lucide-arrow-up-icon lucide-arrow-up" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`;
+    const _SVG_DOWN  = `<svg class="lucide lucide-arrow-down-icon lucide-arrow-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>`;
     document.querySelectorAll(".sortable-header").forEach(th => {
         th.classList.remove('sort-asc', 'sort-desc');
         const icon = th.querySelector('.sort-icon');
@@ -2062,7 +2221,7 @@ const renderStudents = () => {
                 <div class="flex gap-2">
                   <input type="text" name="name" class="input flex-1" placeholder="${t("grade.gradeNamePlaceholder")}">
                   ${hasGradeNames ? `<button type="button" id="grade-name-dropdown-btn" class="btn-outline" style="padding: 0.4rem 0.5rem; display: flex; align-items: center;" title="${t("grade.previousNames")}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    <svg class="lucide lucide-chevron-down-icon lucide-chevron-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                   </button>` : ''}
                 </div>
                 ${hasGradeNames ? `<div id="grade-name-dropdown" class="hidden absolute z-50 mt-1 w-full rounded-lg shadow-lg overflow-auto" style="max-height: 200px; background: var(--card, #1e1e2e); border: 1px solid var(--border, #2d2d3d);">
@@ -2073,7 +2232,7 @@ const renderStudents = () => {
             </div>
             <div class="grid gap-2">
               <label class="block mb-2">${t("grade.category")}</label>
-              <select name="categoryId" id="grade-category-select" class="select w-full" required>
+              <select name="categoryId" id="grade-category-select" class="select w-full" required data-icon="tag">
                 ${categoryOptions}
               </select>
               <p class="text-gray-400 text-sm">${t("grade.categoryHint")}</p>
@@ -2093,14 +2252,14 @@ const renderStudents = () => {
                 </nav>
                 <div role="tabpanel" id="panel-grade-direct" aria-labelledby="tab-grade-direct" tabindex="-1" aria-selected="true">
                   <div class="pt-3">
-                    <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input" placeholder="1-6">
+                    <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input" placeholder="1-6" data-icon="hash">
                     <p class="text-gray-400 text-sm mt-2">${t("grade.enterGrade")}</p>
                   </div>
                 </div>
                 <div role="tabpanel" id="panel-grade-percent" aria-labelledby="tab-grade-percent" tabindex="-1" aria-selected="false" hidden>
                   <div class="pt-3">
                     <div class="flex items-center gap-2">
-                      <input type="number" id="grade-percent-input" step="0.1" min="0" max="100" class="input flex-1" placeholder="0-100">
+                      <input type="number" id="grade-percent-input" step="0.1" min="0" max="100" class="input flex-1" placeholder="0-100" data-icon="percent">
                       <span>%</span>
                     </div>
                     <p class="text-gray-400 text-sm mt-2">${t("grade.enterPercentage")}</p>
@@ -2815,7 +2974,7 @@ const renderHome = () => {
     // Render class overview
     const overviewList = document.getElementById("class-overview-list");
     if (appData.classes.length === 0) {
-        const icon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        const icon = `<svg class="lucide lucide-users-round-icon lucide-users-round" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 21a8 8 0 0 0-16 0" />
             <circle cx="10" cy="8" r="5" />
             <path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3" />
@@ -2867,7 +3026,7 @@ const renderHome = () => {
                         <p class="text-lg font-bold">${escapeHtml(classAverage)}</p>
                         <p class="text-gray-400 text-sm">${t("home.average")}</p>
                     </div>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="class-card-chevron"><polyline points="9 18 15 12 9 6"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="class-card-chevron lucide lucide-chevron-right-icon lucide-chevron-right"><polyline points="9 18 15 12 9 6"/></svg>
                 </div>
             </div>`;
 
@@ -3251,10 +3410,10 @@ const _renderStudentQuickContent = (studentId) => {
     const classAvg = calculateClassAverage(_qsbSemesterFilter);
 
     const trendHtml = trend.trend === 'improving'
-        ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-green-500" style="color:#22c55e"><path d="m18 15-6-6-6 6"/></svg>`
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-green-500 lucide lucide-chevron-up-icon lucide-chevron-up" style="color:#22c55e"><path d="m18 15-6-6-6 6"/></svg>`
         : trend.trend === 'declining'
-        ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#ef4444"><path d="m6 9 6 6 6-6"/></svg>`
-        : `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#eab308"><path d="M5 12h14"/></svg>`;
+        ? `<svg class="lucide lucide-chevron-down-icon lucide-chevron-down" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#ef4444"><path d="m6 9 6 6 6-6"/></svg>`
+        : `<svg class="lucide lucide-minus-icon lucide-minus" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#eab308"><path d="M5 12h14"/></svg>`;
 
     let comparisonHtml = "—";
     if (weightedAvg && classAvg) {
@@ -3322,9 +3481,7 @@ const _renderStudentQuickContent = (studentId) => {
 
     document.getElementById("qsb-content").innerHTML = `
         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap">
-            <button id="qsb-add-grade-btn" class="btn-primary" style="flex:1;font-size:0.85rem;padding:0.4rem 0.75rem;min-width:8rem">
-                + ${t("grade.addGrade")}
-            </button>
+            <button id="qsb-add-grade-btn" class="btn-primary" style="flex:1;font-size:0.85rem;padding:0.4rem 0.75rem;min-width:8rem">${lucideIcon('plus')} ${t("grade.addGrade")}</button>
             <div style="display:flex;gap:0.25rem;flex-shrink:0">
                 ${_qsbMkSemBtn(t("semester.all") || "Gesamt", null)}
                 ${_qsbMkSemBtn(t("semester.WS") || "WS", "WS")}
@@ -3618,6 +3775,10 @@ const showSettingsView = () => {
 
         // Render category management
         renderCategoryManagement();
+
+        if (window.renderOrganisationPanel) window.renderOrganisationPanel();
+        if (window.renderWebUntisPanel) window.renderWebUntisPanel();
+        if (window.renderMoodlePanel) window.renderMoodlePanel();
 
         // Render default subjects
         if (window.renderDefaultSubjects) {
@@ -3934,11 +4095,11 @@ const renderStudentDetail = (studentId) => {
     // Trend display with icon
     const trendEl = document.getElementById("student-stat-trend");
     if (trend.trend === 'improving') {
-        trendEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><path d="m18 15-6-6-6 6"/></svg><span class="text-green-500">${t("student.improving")}</span>`;
+        trendEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 lucide lucide-chevron-up-icon lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg><span class="text-green-500">${t("student.improving")}</span>`;
     } else if (trend.trend === 'declining') {
-        trendEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><path d="m6 9 6 6 6-6"/></svg><span class="text-red-500">${t("student.declining")}</span>`;
+        trendEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500 lucide lucide-chevron-down-icon lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg><span class="text-red-500">${t("student.declining")}</span>`;
     } else {
-        trendEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-500"><path d="M5 12h14"/></svg><span class="text-yellow-500">${t("student.stable")}</span>`;
+        trendEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-500 lucide lucide-minus-icon lucide-minus"><path d="M5 12h14"/></svg><span class="text-yellow-500">${t("student.stable")}</span>`;
     }
 
     // Class comparison
@@ -3966,7 +4127,7 @@ const renderStudentDetail = (studentId) => {
         banner.className = 'mb-4 p-4 rounded-lg border-2 border-red-500 bg-red-50 dark:bg-red-900/20';
         banner.innerHTML = `
             <div class="flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-600 dark:text-red-400 flex-shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-600 dark:text-red-400 flex-shrink-0 lucide lucide-circle-alert-icon lucide-circle-alert"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 <div>
                     <p class="font-semibold text-red-700 dark:text-red-400">${t('attendance.criticalWarning')}</p>
                     <p class="text-sm text-red-600 dark:text-red-400/80">${t('attendance.title')}: ${attendanceStatus.rate}% — ${t('attendance.minPercent')}: ${attendanceStatus.minPercent}%</p>
@@ -3981,7 +4142,7 @@ const renderStudentDetail = (studentId) => {
         banner.className = 'mb-4 p-4 rounded-lg border-2 border-orange-400 bg-orange-50 dark:bg-orange-900/20';
         banner.innerHTML = `
             <div class="flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-orange-500 dark:text-orange-400 flex-shrink-0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-orange-500 dark:text-orange-400 flex-shrink-0 lucide lucide-triangle-alert-icon lucide-triangle-alert"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                 <div>
                     <p class="font-semibold text-orange-700 dark:text-orange-400">${t('attendance.lowWarning')}</p>
                     <p class="text-sm text-orange-600 dark:text-orange-400/80">${t('attendance.title')}: ${attendanceStatus.rate}% — ${t('attendance.minPercent')}: ${attendanceStatus.minPercent}%</p>
@@ -4306,7 +4467,7 @@ const renderStudentGradesTable = (student, filteredGrades = null) => {
     );
 
     if (sortedGrades.length === 0) {
-        const icon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        const icon = `<svg class="lucide lucide-pen-line-icon lucide-pen-line" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 20h9" />
             <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
         </svg>`;
@@ -4352,7 +4513,7 @@ const renderStudentGradesTable = (student, filteredGrades = null) => {
             ? `<span class="badge ${absenceOnGradeDay.status === 'absent' ? 'badge-destructive' : 'badge-warning'} text-xs ml-1"
                 data-tooltip="${absenceOnGradeDay.status === 'absent' ? escapeHtml(t('attendance.view.absentOnGradeDay')) : escapeHtml(t('attendance.view.lateOnGradeDay'))}" data-side="top"
                 style="display:inline-flex;align-items:center;gap:2px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <svg class="lucide lucide-triangle-alert-icon lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
               </span>`
             : '';
 
@@ -4450,7 +4611,7 @@ const renderStudentGradesTable = (student, filteredGrades = null) => {
                             </div>`;
                     } else {
                         valueInput = `
-                            <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input-edit" placeholder="1-6">
+                            <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input-edit" placeholder="1-6" data-icon="hash">
                             <p class="text-gray-400 text-sm mt-2">${t("grade.enterGrade")}</p>
                         `;
                     }
@@ -4497,14 +4658,14 @@ const renderStudentGradesTable = (student, filteredGrades = null) => {
                           </nav>
                           <div role="tabpanel" id="panel-grade-direct-edit" aria-labelledby="tab-grade-direct-edit" tabindex="-1" aria-selected="${gradeSelected}" ${gradeSelected ? '' : 'hidden'}>
                             <div class="pt-3">
-                              <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input-edit" value="${escapeHtml(grade.value || '')}" placeholder="1-6">
+                              <input type="number" name="value" step="0.1" min="1" max="6" class="input w-full" id="grade-value-input-edit" value="${escapeHtml(grade.value || '')}" placeholder="1-6" data-icon="hash">
                               <p class="text-gray-400 text-sm mt-2">${t("grade.enterGrade")}</p>
                             </div>
                           </div>
                           <div role="tabpanel" id="panel-grade-percent-edit" aria-labelledby="tab-grade-percent-edit" tabindex="-1" aria-selected="${percentSelected}" ${percentSelected ? '' : 'hidden'}>
                             <div class="pt-3">
                               <div class="flex items-center gap-2">
-                                <input type="number" id="grade-percent-input-edit" step="0.1" min="0" max="100" class="input flex-1" value="${escapeHtml(initialPercent || '')}" placeholder="0-100">
+                                <input type="number" id="grade-percent-input-edit" step="0.1" min="0" max="100" class="input flex-1" value="${escapeHtml(initialPercent || '')}" placeholder="0-100" data-icon="percent">
                                 <span>%</span>
                               </div>
                               <p class="text-gray-400 text-sm mt-2">${t("grade.enterPercentage")}</p>
@@ -4939,7 +5100,7 @@ function renderAttendanceDialog() {
       <div class="attendance-student-card" data-student-id="${safeAttr(student.id)}">
         <div class="flex items-center gap-3 p-3 border rounded-lg">
           <div class="attendance-avatar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="lucide lucide-user-icon lucide-user" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
@@ -4953,18 +5114,18 @@ function renderAttendanceDialog() {
           </div>
           <div class="attendance-status-buttons flex gap-2 shrink-0">
             <button type="button" class="btn-primary attendance-status-btn selected" data-status="present" title="${t('attendance.present')}">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg class="lucide lucide-check-icon lucide-check" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </button>
             <button type="button" class="btn-secondary attendance-status-btn" data-status="late" title="${t('attendance.late')}">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg class="lucide lucide-clock-icon lucide-clock" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 14"></polyline>
               </svg>
             </button>
             <button type="button" class="btn-secondary attendance-status-btn" data-status="absent" title="${t('attendance.absent')}">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
@@ -4984,7 +5145,7 @@ function renderAttendanceDialog() {
     <form id="attendance-form" class="form grid gap-4">
       <div class="grid gap-2">
         <label for="attendance-subject">${t('attendance.subject')}</label>
-        <select id="attendance-subject" name="subject" class="select" required>
+        <select id="attendance-subject" name="subject" class="select" required data-icon="book-open">
           ${subjectOptions}
         </select>
       </div>
@@ -5194,13 +5355,13 @@ function renderStudentAttendanceList(student) {
         <td>
           <div class="flex items-center justify-end gap-1">
             <button class="btn-icon btn-secondary btn-small" data-edit-attendance="${escapeHtml(entry.id)}" data-tooltip="${t('attendance.editEntry')}" data-side="left">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg class="lucide lucide-square-pen-icon lucide-square-pen" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
               </svg>
             </button>
             <button class="btn-icon btn-destructive btn-small" data-delete-attendance="${escapeHtml(entry.id)}" data-tooltip="${t('dialog.delete')}" data-side="left">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg class="lucide lucide-trash-icon lucide-trash" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
               </svg>
             </button>
@@ -5374,11 +5535,11 @@ const _renderAttCalendar = () => {
     container.innerHTML = `
         <div class="att-cal-header">
             <button class="btn-icon-outline" id="att-prev-month" title="${escapeHtml(t('attendance.view.prevMonth'))}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                <svg class="lucide lucide-chevron-left-icon lucide-chevron-left" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             </button>
             <span class="font-semibold text-sm">${escapeHtml(monthYearLabel)}</span>
             <button class="btn-icon-outline" id="att-next-month" title="${escapeHtml(t('attendance.view.nextMonth'))}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                <svg class="lucide lucide-chevron-right-icon lucide-chevron-right" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </button>
         </div>
         <div class="att-cal-weekdays">${weekdays.map(d => `<span>${escapeHtml(d)}</span>`).join('')}</div>
@@ -5429,7 +5590,7 @@ const _renderAttStudentPanel = () => {
 
     if (!selectedDate) {
         container.innerHTML = `<div class="att-no-date-msg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <svg class="lucide lucide-calendar-icon lucide-calendar" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             <p class="text-sm">${escapeHtml(t('attendance.view.selectDate'))}</p>
         </div>`;
         return;
@@ -5452,9 +5613,9 @@ const _renderAttStudentPanel = () => {
         ? `<select id="att-subject-sel" class="select" style="font-size:0.8rem;padding:0.25rem 0.5rem;height:auto;">${subjectOptions}</select>`
         : '';
 
-    const svgCheck = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-    const svgClock = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
-    const svgX    = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    const svgCheck = `<svg class="lucide lucide-check-icon lucide-check" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const svgClock = `<svg class="lucide lucide-clock-icon lucide-clock" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+    const svgX    = `<svg class="lucide lucide-x-icon lucide-x" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 
 
     const notePlaceholder = escapeHtml(t('attendance.notesPlaceholder'));
@@ -5493,7 +5654,7 @@ const _renderAttStudentPanel = () => {
         <div class="att-students-list" id="att-students-list">${studentRows}</div>
         <div class="att-save-footer">
             <button class="btn-primary w-full" id="att-save-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <svg class="lucide lucide-save-icon lucide-save" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 ${escapeHtml(t('attendance.view.save'))}
             </button>
         </div>`;
@@ -5869,7 +6030,7 @@ const initClassExamMode = () => {
         document.getElementById('class-exam-date').value = st.date || new Date().toISOString().split('T')[0];
         document.getElementById('class-exam-setup-error').classList.add('hidden');
         const startBtn = document.getElementById('class-exam-start');
-        if (startBtn) startBtn.textContent = (t('classExam.saveMeta') || 'Speichern');
+        if (startBtn) startBtn.innerHTML = `${lucideIcon('save')} ${escapeHtml(t('classExam.saveMeta') || 'Speichern')}`;
     };
 
     const _resumeDraft = () => {
@@ -5975,9 +6136,10 @@ const initClassExamMode = () => {
         nameEl.value = '';
         nameEl.removeAttribute('aria-invalid');
         document.getElementById('class-exam-date').removeAttribute('aria-invalid');
+        document.getElementById('class-exam-webuntis-hint')?.classList.add('hidden');
         document.getElementById('class-exam-setup-error').classList.add('hidden');
         const startBtn = document.getElementById('class-exam-start');
-        if (startBtn) startBtn.textContent = (t('classExam.start') || 'Noten eintragen →');
+        if (startBtn) startBtn.innerHTML = `<span data-i18n="classExam.start">${escapeHtml(t('classExam.start') || 'Noten eintragen')}</span> ${lucideIcon('arrow-right')}`;
     };
 
     // ── Open / Close ────────────────────────────────────────────────────────
@@ -6191,9 +6353,9 @@ const initClassExamMode = () => {
         // Update save button label based on mode
         const saveBtn = document.getElementById('class-exam-save');
         if (saveBtn) {
-            saveBtn.textContent = (mode === 'edit')
+            saveBtn.innerHTML = `${lucideIcon('save')} ${escapeHtml((mode === 'edit')
                 ? (t('classExam.saveEdit') || 'Änderungen speichern')
-                : (t('classExam.save') || 'Alle Noten speichern');
+                : (t('classExam.save') || 'Alle Noten speichern'))}`;
         }
 
         // Wire row clicks (toggle inline edit)
@@ -6292,6 +6454,15 @@ const initClassExamMode = () => {
             ? (t('classExam.toastUpdated') || '{n} Noten aktualisiert.').replace('{n}', saved)
             : `${saved} Note${saved !== 1 ? 'n' : ''} gespeichert.`;
         showToast(msg, 'success');
+
+        // Best-effort: push new (not edited) exams to a mapped Moodle course
+        // calendar. Fire-and-forget — grades are already saved above either way.
+        if (mode !== 'edit' && saved > 0 && typeof window.pushMoodleExamEvent === 'function') {
+            const cls = getCurrentClass();
+            if (cls && appData.moodleClassMap && appData.moodleClassMap[cls.id]) {
+                window.pushMoodleExamEvent(cls.id, name, Math.floor(gradeTimestamp / 1000));
+            }
+        }
     });
 
     // Cancel from summary
@@ -6315,6 +6486,30 @@ const initClassExamMode = () => {
         _resetSetupForm();
         showStep(stepSetup);
         setTimeout(() => document.getElementById('class-exam-name')?.focus(), 50);
+        _suggestWebUntisDate();
+    };
+
+    // Best-effort: prefill the date field from the connected WebUntis
+    // timetable's next matching lesson. No-ops silently if WebUntis isn't
+    // connected or nothing matches — see suggestWebUntisExamDate() in
+    // webuntis.js for the matching logic.
+    const _suggestWebUntisDate = async () => {
+        if (typeof window.suggestWebUntisExamDate !== 'function') return;
+        const cy = getCurrentYear();
+        const cls = getCurrentClass();
+        const subjectId = document.getElementById('class-exam-subject')?.value;
+        const subject = (cy && cy.subjects || []).find(s => s.id === subjectId);
+        const hint = await window.suggestWebUntisExamDate(subject && subject.name, cls && cls.name);
+        const hintEl = document.getElementById('class-exam-webuntis-hint');
+        if (!hint || !hintEl) return;
+        // Don't clobber a date the user already changed while we were waiting.
+        const dateInput = document.getElementById('class-exam-date');
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (dateInput && dateInput.value === todayStr) {
+            dateInput.value = hint.date;
+        }
+        hintEl.textContent = t('webuntis.examDateSuggested', { date: hint.date });
+        hintEl.classList.remove('hidden');
     };
     const newBtn      = document.getElementById('class-exam-new-btn');
     const newBtnEmpty = document.getElementById('class-exam-new-btn-empty');

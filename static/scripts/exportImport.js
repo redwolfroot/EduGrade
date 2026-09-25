@@ -19,7 +19,7 @@ const showImportProgress = () => {
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; padding: 2rem; text-align: center;">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; width: 100%; max-width: 320px;">
                     <div style="margin-bottom: 0.5rem; background: rgba(255, 255, 255, 0.1); color: currentColor; display: flex; width: 48px; height: 48px; align-items: center; justify-content: center; border-radius: 50%;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg class="lucide lucide-shield-check-icon lucide-shield-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
                             <path d="m9 12 2 2 4-4"/>
                         </svg>

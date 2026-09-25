@@ -129,6 +129,56 @@ _CREATE_STATEMENTS = [
         doc         TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS orgs (
+        id            TEXT PRIMARY KEY,
+        name          TEXT NOT NULL,
+        join_code     TEXT NOT NULL UNIQUE,
+        admin_user_id TEXT NOT NULL,
+        created_at    TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS org_members (
+        org_id       TEXT NOT NULL,
+        user_id      TEXT NOT NULL UNIQUE,
+        role         TEXT NOT NULL DEFAULT 'teacher',
+        status       TEXT NOT NULL DEFAULT 'pending',
+        requested_at TEXT NOT NULL,
+        approved_at  TEXT,
+        PRIMARY KEY (org_id, user_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_org_members_org_status ON org_members(org_id, status)",
+    """
+    CREATE TABLE IF NOT EXISTS org_roster (
+        org_id       TEXT NOT NULL,
+        user_id      TEXT NOT NULL,
+        class_id     TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        class_name   TEXT NOT NULL,
+        teacher_name TEXT,
+        updated_at   TEXT NOT NULL,
+        PRIMARY KEY (org_id, user_id, class_id, student_name)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_org_roster_org ON org_roster(org_id)",
+    """
+    CREATE TABLE IF NOT EXISTS class_handovers (
+        token          TEXT PRIMARY KEY,
+        org_id         TEXT NOT NULL,
+        from_user_id   TEXT NOT NULL,
+        to_user_id     TEXT NOT NULL,
+        class_id       TEXT NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'pending',
+        encrypted_data TEXT,
+        created_at     TEXT NOT NULL,
+        expires_at     TEXT NOT NULL,
+        doc            TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_class_handovers_to_status ON class_handovers(to_user_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_class_handovers_from ON class_handovers(from_user_id)",
 ]
 
 
@@ -559,3 +609,215 @@ def iter_reset_tokens() -> list[tuple[str, dict]]:
         "SELECT token, doc FROM password_reset_tokens"
     ).fetchall()
     return [(row["token"], _loads(row["doc"])) for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Organisations
+# ---------------------------------------------------------------------------
+
+def create_org(org_id: str, name: str, join_code: str, admin_user_id: str, created_at: str) -> None:
+    """Insert a new org row."""
+    _execute_write(
+        "INSERT INTO orgs (id, name, join_code, admin_user_id, created_at) VALUES (?, ?, ?, ?, ?)",
+        (org_id, name, join_code, admin_user_id, created_at),
+    )
+
+
+def get_org(org_id: str) -> dict | None:
+    """Return the org dict for *org_id*, or None if not found."""
+    row = _conn.execute(
+        "SELECT id, name, join_code, admin_user_id, created_at FROM orgs WHERE id = ?",
+        (org_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_org_by_join_code(join_code: str) -> dict | None:
+    """Return the org dict for *join_code*, or None if not found."""
+    row = _conn.execute(
+        "SELECT id, name, join_code, admin_user_id, created_at FROM orgs WHERE join_code = ?",
+        (join_code,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_org_membership(user_id: str) -> dict | None:
+    """Return the membership row for *user_id* (at most one org per user), or None."""
+    row = _conn.execute(
+        "SELECT org_id, user_id, role, status, requested_at, approved_at "
+        "FROM org_members WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def put_org_member(org_id: str, user_id: str, role: str, status: str, requested_at: str, approved_at: str | None = None) -> None:
+    """Insert or replace a membership row."""
+    _execute_write(
+        """
+        INSERT OR REPLACE INTO org_members
+            (org_id, user_id, role, status, requested_at, approved_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (org_id, user_id, role, status, requested_at, approved_at),
+    )
+
+
+def list_pending_members(org_id: str) -> list[dict]:
+    """Return pending membership rows for *org_id*."""
+    rows = _conn.execute(
+        "SELECT org_id, user_id, role, status, requested_at, approved_at "
+        "FROM org_members WHERE org_id = ? AND status = 'pending'",
+        (org_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_org_members(org_id: str) -> list[dict]:
+    """Return approved membership rows for *org_id*."""
+    rows = _conn.execute(
+        "SELECT org_id, user_id, role, status, requested_at, approved_at "
+        "FROM org_members WHERE org_id = ? AND status = 'approved'",
+        (org_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def approve_member(org_id: str, user_id: str, approved_at: str) -> None:
+    """Mark a pending membership as approved."""
+    _execute_write(
+        "UPDATE org_members SET status = 'approved', approved_at = ? WHERE org_id = ? AND user_id = ?",
+        (approved_at, org_id, user_id),
+    )
+
+
+def remove_member(org_id: str, user_id: str) -> None:
+    """Delete a membership row (reject a pending request, or leave/kick)."""
+    _execute_write(
+        "DELETE FROM org_members WHERE org_id = ? AND user_id = ?",
+        (org_id, user_id),
+    )
+
+
+def delete_org(org_id: str) -> None:
+    """Delete an org and all its memberships/roster rows."""
+    with _write_lock:
+        with _conn:
+            _conn.execute("DELETE FROM orgs WHERE id = ?", (org_id,))
+            _conn.execute("DELETE FROM org_members WHERE org_id = ?", (org_id,))
+            _conn.execute("DELETE FROM org_roster WHERE org_id = ?", (org_id,))
+
+
+# ---------------------------------------------------------------------------
+# Org roster (student name + class only, no grades — deliberate exception to
+# the zero-knowledge model, scoped to name/class fields only)
+# ---------------------------------------------------------------------------
+
+def replace_roster_for_class(org_id: str, user_id: str, class_id: str, class_name: str, teacher_name: str, student_names: list[str], updated_at: str) -> None:
+    """Replace all roster rows for one (org, teacher, class) with *student_names*."""
+    with _write_lock:
+        with _conn:
+            _conn.execute(
+                "DELETE FROM org_roster WHERE org_id = ? AND user_id = ? AND class_id = ?",
+                (org_id, user_id, str(class_id)),
+            )
+            _conn.executemany(
+                """
+                INSERT OR REPLACE INTO org_roster
+                    (org_id, user_id, class_id, student_name, class_name, teacher_name, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (org_id, user_id, str(class_id), name, class_name, teacher_name, updated_at)
+                    for name in student_names
+                ],
+            )
+
+
+def delete_roster_for_class(org_id: str, user_id: str, class_id: str) -> None:
+    """Remove all roster rows for one (org, teacher, class)."""
+    _execute_write(
+        "DELETE FROM org_roster WHERE org_id = ? AND user_id = ? AND class_id = ?",
+        (org_id, user_id, str(class_id)),
+    )
+
+
+def delete_roster_for_user(org_id: str, user_id: str) -> None:
+    """Remove all roster rows for one teacher within an org (e.g. on leave)."""
+    _execute_write(
+        "DELETE FROM org_roster WHERE org_id = ? AND user_id = ?",
+        (org_id, user_id),
+    )
+
+
+def list_roster(org_id: str) -> list[dict]:
+    """Return all roster rows for *org_id* (student_name, class_name, teacher_name)."""
+    rows = _conn.execute(
+        "SELECT student_name, class_name, teacher_name FROM org_roster "
+        "WHERE org_id = ? ORDER BY class_name, student_name",
+        (org_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Class handovers
+# ---------------------------------------------------------------------------
+
+def put_handover(token: str, handover_dict: dict) -> None:
+    """Insert or replace a class handover record.
+
+    Extracts ``org_id``, ``from_user_id``, ``to_user_id``, ``class_id``,
+    ``status``, ``encrypted_data``, ``created_at``, ``expires_at`` into
+    dedicated columns; stores full dict in ``doc``.
+    """
+    _execute_write(
+        """
+        INSERT OR REPLACE INTO class_handovers
+            (token, org_id, from_user_id, to_user_id, class_id, status,
+             encrypted_data, created_at, expires_at, doc)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            token,
+            handover_dict.get("org_id"),
+            handover_dict.get("from_user_id"),
+            handover_dict.get("to_user_id"),
+            handover_dict.get("class_id"),
+            handover_dict.get("status", "pending"),
+            handover_dict.get("encrypted_data"),
+            handover_dict.get("created_at"),
+            handover_dict.get("expires_at"),
+            _dumps(handover_dict),
+        ),
+    )
+
+
+def get_handover(token: str) -> dict | None:
+    """Return the handover dict for *token*, or None if not found."""
+    row = _conn.execute(
+        "SELECT doc FROM class_handovers WHERE token = ?", (token,)
+    ).fetchone()
+    return _loads(row["doc"]) if row else None
+
+
+def list_handovers_for_user(user_id: str, status: str = "pending") -> list[tuple[str, dict]]:
+    """Return (token, handover_dict) pairs addressed to *user_id* with the given status."""
+    rows = _conn.execute(
+        "SELECT token, doc FROM class_handovers WHERE to_user_id = ? AND status = ?",
+        (user_id, status),
+    ).fetchall()
+    return [(row["token"], _loads(row["doc"])) for row in rows]
+
+
+def delete_handover(token: str) -> None:
+    """Delete a handover record by token (no-op if absent)."""
+    _execute_write("DELETE FROM class_handovers WHERE token = ?", (token,))
+
+
+def delete_expired_handovers(now_iso: str) -> None:
+    """Delete all pending handovers whose ``expires_at`` is before *now_iso*."""
+    _execute_write(
+        "DELETE FROM class_handovers WHERE status = 'pending' AND expires_at < ?",
+        (now_iso,),
+    )
