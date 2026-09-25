@@ -3,5 +3,13 @@
 # Config file with secret key (generated on first start)
 data/config.json
 
-# Database files (contain user data)
+# Database files (contain user data) — never commit real user data
 data/edugrade.json
+data/edugrade.json.bak
+data/edugrade.db
+data/edugrade.db-wal
+data/edugrade.db-shm
+
+# Python caches
+__pycache__/
+*.pyc
