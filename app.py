@@ -46,6 +46,7 @@ from quart import Quart, render_template, request, jsonify, redirect, url_for, m
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from io import BytesIO
 import base64 as b64
 
@@ -122,6 +123,8 @@ def record_share_pin_failure(share_token: str) -> None:
 # Rate limit configurations: {endpoint_pattern: (max_requests, time_window_seconds)}
 RATE_LIMITS = {
     'login': (5, 60),           # 5 attempts per minute
+    'login_code': (10, 60),     # 10 one-time-code attempts per minute (each pending login also caps at 5)
+    'device_unlock': (20, 60),  # silent re-unlock of paired phones (256-bit secret, not guessable)
     'register': (3, 60),        # 3 attempts per minute
     'data_write': (120, 60),    # 120 writes per minute (granular per-class saves)
     'data_read': (240, 60),     # 240 reads per minute (granular per-class loads)
@@ -1717,12 +1720,16 @@ def register_user(username: str, email: str, password: str, account_type: str = 
         'recovery_key': recovery_key
     }
 
-def _list_active_sessions_for_user(user_id: str) -> list[str]:
-    """Return all non-expired session tokens belonging to this user."""
+def _list_active_sessions_for_user(user_id: str, include_device: bool = True) -> list[str]:
+    """Return all non-expired session tokens belonging to this user.
+    `include_device=False` skips the paired phone's session, which is exempt
+    from the single-session rule (the phone is never logged out)."""
     now = datetime.now()
     active = []
     for tok, sess in db_layer.iter_sessions():
         if sess.get('user_id') != user_id:
+            continue
+        if not include_device and sess.get('device'):
             continue
         try:
             if datetime.fromisoformat(sess.get('expires_at', '')) < now:
@@ -1733,11 +1740,15 @@ def _list_active_sessions_for_user(user_id: str) -> list[str]:
     return active
 
 
-def _terminate_user_sessions(user_id: str) -> int:
+def _terminate_user_sessions(user_id: str, keep_device: bool = False, only_device: bool = False) -> int:
     """Delete all sessions for a user and clear in-memory caches/keys.
-    Returns the number of sessions removed.
+    `keep_device` spares the paired phone's session; `only_device` removes
+    nothing but it. Returns the number of sessions removed.
     """
-    tokens = [t for t, s in db_layer.iter_sessions() if s.get('user_id') == user_id]
+    tokens = [t for t, s in db_layer.iter_sessions()
+              if s.get('user_id') == user_id
+              and not (keep_device and s.get('device'))
+              and not (only_device and not s.get('device'))]
     for tok in tokens:
         db_layer.delete_session(tok)
         clear_session_cache(tok)
@@ -1813,8 +1824,9 @@ def login_user(email: str, password: str, force: bool = False, long_session: boo
     # one already exists, refuse the login unless the caller explicitly opts
     # in to take over (`force=True`), in which case the old sessions are
     # invalidated first.
+    # The paired phone's session never counts — it stays logged in regardless.
     user_id = user["id"]
-    existing_tokens = _list_active_sessions_for_user(user_id)
+    existing_tokens = _list_active_sessions_for_user(user_id, include_device=False)
     if existing_tokens and not force:
         return {
             'success': False,
@@ -1823,24 +1835,7 @@ def login_user(email: str, password: str, force: bool = False, long_session: boo
             'token': None,
             'user': None
         }
-    if existing_tokens and force:
-        removed = _terminate_user_sessions(user_id)
-        logger.info("Force-login for user %s terminated %d existing session(s)", user_id, removed)
 
-    # Create session. App clients get a long-lived (6-month) session; web stays at 1h.
-    token = generate_session_token()
-    session_ttl = timedelta(days=180) if long_session else timedelta(hours=1)
-    expires_at = (datetime.now() + session_ttl).isoformat()
-
-    db_layer.put_session(token, {
-        "user_id": user["id"],
-        "created_at": datetime.now().isoformat(),
-        "expires_at": expires_at,
-        "long_session": long_session
-    })
-
-    # Handle encryption key
-    user_id = user["id"]
     encryption_salt_hex = user.get("encryption_salt")
 
     if not encryption_salt_hex:
@@ -1854,7 +1849,54 @@ def login_user(email: str, password: str, force: bool = False, long_session: boo
     # Derive encryption key
     encryption_salt = bytes.fromhex(encryption_salt_hex)
     encryption_key = derive_encryption_key(password, encryption_salt)
+
+    # Accounts with a paired phone need a second factor: the password alone
+    # only opens a short-lived pending login; the session is created once the
+    # one-time code shown on the phone is typed in (see /api/login/verify-code).
+    device = user.get('device')
+    if device:
+        pending_id = create_pending_login(user, encryption_key, long_session, force)
+        return {
+            'success': False,
+            'message': 'backend.deviceCodeRequired',
+            'code': 'device_code_required',
+            'pending_id': pending_id,
+            'expires_in': LOGIN_CODE_TTL_SECONDS,
+            'device_name': device.get('name') or '',
+            'token': None,
+            'user': None
+        }
+
+    return finish_login(user, encryption_key, long_session, force)
+
+
+def _create_session(user_id: str, encryption_key: bytes, long_session: bool, device: bool = False) -> str:
+    """Persist a new session and hold its data key in RAM. App clients get a
+    long-lived (6-month) session; web stays at 1h."""
+    token = generate_session_token()
+    session_ttl = timedelta(days=180) if (long_session or device) else timedelta(hours=1)
+    db_layer.put_session(token, {
+        "user_id": user_id,
+        "created_at": datetime.now().isoformat(),
+        "expires_at": (datetime.now() + session_ttl).isoformat(),
+        "long_session": long_session or device,
+        "device": device
+    })
     encryption_keys[token] = encryption_key
+    return token
+
+
+def finish_login(user: dict, encryption_key: bytes, long_session: bool, force: bool) -> dict:
+    """Second half of a successful login: single-session takeover, session
+    creation and v2 migration. Shared by password login and code login."""
+    user_id = user["id"]
+    email = user["email"]
+    if force:
+        removed = _terminate_user_sessions(user_id, keep_device=True)
+        if removed:
+            logger.info("Force-login for user %s terminated %d existing session(s)", user_id, removed)
+
+    token = _create_session(user_id, encryption_key, long_session)
 
     # Migrate to v2 split layout if still on legacy single-blob v1
     # (handles both encrypted and plaintext v1 records; migrate_user_to_v2
@@ -1873,12 +1915,156 @@ def login_user(email: str, password: str, force: bool = False, long_session: boo
         'message': 'backend.loginSuccess',
         'token': token,
         'needs_recovery_key': needs_recovery_key,
+        'device_paired': bool(user.get('device')),
         'user': {
             'id': user['id'],
             'username': user['username'],
             'email': user['email']
         }
     }
+
+
+# ============ PAIRED PHONE (account anchor) ============
+# One phone per account can be paired. The phone generates a 256-bit secret
+# (kept in the Android Keystore); the server stores only its SHA-256 and the
+# data key (DEK) wrapped with a key derived from it — same zero-knowledge
+# pattern as the recovery-key-wrapped `encrypted_dek`. With it the phone can
+# silently re-unlock after a server restart, so it is never logged out.
+# Browser (or other-device) logins for paired accounts need a one-time code
+# the phone displays.
+
+LOGIN_CODE_TTL_SECONDS = 180
+LOGIN_CODE_MAX_ATTEMPTS = 5
+MAX_PENDING_LOGINS_PER_USER = 3
+# Passwordless logins (email + phone code) are guessable by anyone who knows
+# the email, 5 tries at a time. Cap wrong codes per account per day; past the
+# cap the account falls back to password + code until the window passes.
+PASSWORDLESS_MAX_FAILURES = 10
+PASSWORDLESS_WINDOW_SECONDS = 24 * 60 * 60
+passwordless_failures = defaultdict(list)   # user_id -> [failure timestamps]
+
+# pending_id -> {user_id, email, dek, long_session, force, code, expires_ts,
+#                attempts, created_at, ip, user_agent, denied}
+# In memory on purpose: it holds a DEK for at most LOGIN_CODE_TTL_SECONDS.
+# ponytail: per-process; fine for single-worker, like encryption_keys.
+pending_logins = {}
+
+
+def _purge_pending_logins():
+    now_ts = time.time()
+    for pid in [p for p, e in pending_logins.items() if e['expires_ts'] < now_ts]:
+        pending_logins.pop(pid, None)
+
+
+def _describe_user_agent(ua: str) -> str:
+    """Short 'Browser on OS' label for the phone's confirmation screen."""
+    ua = ua or ''
+    browser = next((name for key, name in (
+        ('Edg/', 'Edge'), ('OPR/', 'Opera'), ('Firefox/', 'Firefox'), ('SamsungBrowser', 'Samsung Internet'),
+        ('Chrome/', 'Chrome'), ('Safari/', 'Safari'), ('okhttp', 'EduGrade App')) if key in ua), 'Browser')
+    system = next((name for key, name in (
+        ('Windows', 'Windows'), ('Android', 'Android'), ('iPhone', 'iOS'), ('iPad', 'iPadOS'),
+        ('Mac OS', 'macOS'), ('CrOS', 'ChromeOS'), ('Linux', 'Linux')) if key in ua), '')
+    return f"{browser} · {system}" if system else browser
+
+
+def passwordless_locked(user_id: str) -> bool:
+    cutoff = time.time() - PASSWORDLESS_WINDOW_SECONDS
+    passwordless_failures[user_id] = [t for t in passwordless_failures[user_id] if t > cutoff]
+    return len(passwordless_failures[user_id]) >= PASSWORDLESS_MAX_FAILURES
+
+
+def create_pending_login(user: dict, encryption_key: bytes | None, long_session: bool, force: bool) -> str:
+    """`encryption_key=None` = passwordless: the data key is supplied later by
+    the paired phone (attach step), and the code is only revealed once it is."""
+    _purge_pending_logins()
+    mine = sorted((e['created_ts'], p) for p, e in pending_logins.items() if e['user_id'] == user['id'])
+    for _, pid in mine[:max(0, len(mine) - MAX_PENDING_LOGINS_PER_USER + 1)]:
+        pending_logins.pop(pid, None)
+    pending_id = secrets.token_urlsafe(24)
+    now_ts = time.time()
+    pending_logins[pending_id] = {
+        'user_id': user['id'],
+        'email': user['email'],
+        'dek': encryption_key,
+        'long_session': long_session,
+        'force': force,
+        'code': f"{secrets.randbelow(10 ** 6):06d}",
+        'created_ts': now_ts,
+        'expires_ts': now_ts + LOGIN_CODE_TTL_SECONDS,
+        'attempts': 0,
+        'ip': get_client_ip(),
+        'user_agent': _describe_user_agent(request.headers.get('User-Agent', '')),
+        'denied': False,
+        'passwordless': encryption_key is None,
+    }
+    return pending_id
+
+
+def _unwrap_device_dek(user: dict, secret: bytes | None) -> bytes | None:
+    """Data key via the paired phone's secret, or None if it doesn't match."""
+    device = user.get('device')
+    if not (secret and device and secrets.compare_digest(_device_secret_hash(secret), device.get('secret_hash', ''))):
+        return None
+    try:
+        return decrypt_bytes(device['wrapped_dek'], _device_wrap_key(secret, bytes.fromhex(device['salt'])))
+    except Exception:
+        return None
+
+
+def _decode_device_secret(raw) -> bytes | None:
+    """The phone sends its secret base64-encoded; require >= 256 bits."""
+    try:
+        secret = base64.b64decode(str(raw or ''), validate=True)
+    except Exception:
+        return None
+    return secret if len(secret) >= 32 else None
+
+
+def _device_wrap_key(secret: bytes, salt: bytes) -> bytes:
+    # The secret is already uniformly random, so HKDF (not a slow KDF) suffices.
+    return HKDF(algorithm=hashes.SHA256(), length=32, salt=salt,
+                info=b'edugrade-device-dek-wrap').derive(secret)
+
+
+def _device_secret_hash(secret: bytes) -> str:
+    return hashlib.sha256(b'edugrade-device-auth:' + secret).hexdigest()
+
+
+def pair_device(user: dict, secret: bytes, name: str, dek: bytes) -> dict:
+    """Store (or replace) the paired phone for `user`. Returns the device record."""
+    salt = secrets.token_bytes(16)
+    device = {
+        'id': secrets.token_hex(12),
+        'name': (name or '').strip()[:60] or 'Smartphone',
+        'paired_at': datetime.now().isoformat(),
+        'last_seen': datetime.now().isoformat(),
+        'salt': salt.hex(),
+        'secret_hash': _device_secret_hash(secret),
+        'wrapped_dek': encrypt_bytes(dek, _device_wrap_key(secret, salt)),
+    }
+    user['device'] = device
+    db_layer.put_user(user['email'], user)
+    return device
+
+
+def unpair_device(user: dict) -> None:
+    """Forget the paired phone. Its session keeps working as an ordinary
+    (non-exempt) app session, so unpairing never logs anybody out."""
+    if user.pop('device', None) is None:
+        return
+    db_layer.put_user(user['email'], user)
+    for tok, sess in db_layer.iter_sessions():
+        if sess.get('user_id') == user['id'] and sess.get('device'):
+            sess['device'] = False
+            db_layer.put_session(tok, sess)
+    for pid in [p for p, e in pending_logins.items() if e['user_id'] == user['id']]:
+        pending_logins.pop(pid, None)
+
+
+def _session_for_request() -> dict | None:
+    token = get_token_from_request()
+    return db_layer.get_session(token) if token else None
 
 def logout_user(token: str) -> bool:
     """Log out a user by invalidating their session"""
@@ -2343,21 +2529,284 @@ async def api_login():
         # 409 Conflict: client must confirm before we kill the other session.
         return jsonify(result), 409
 
+    if result.get('code') == 'device_code_required':
+        # Password was right; the paired phone now shows the one-time code.
+        return jsonify(result), 202
+
     if result['success']:
-        response = await make_response(jsonify(result))
-        # Match the cookie lifetime to the session TTL (6 months for the app, 1h for web).
-        max_age = (180 * 24 * 60 * 60) if long_session else (1 * 60 * 60)
-        response.set_cookie(
-            'session_token',
-            result['token'],
-            httponly=True,
-            secure=COOKIE_SECURE,
-            samesite='Lax',
-            max_age=max_age
-        )
-        return response
+        return await _login_response(result, long_session)
 
     return jsonify(result), 401
+
+
+async def _login_response(result: dict, long_session: bool):
+    response = await make_response(jsonify(result))
+    # Match the cookie lifetime to the session TTL (6 months for the app, 1h for web).
+    max_age = (180 * 24 * 60 * 60) if long_session else (1 * 60 * 60)
+    response.set_cookie(
+        'session_token',
+        result['token'],
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite='Lax',
+        max_age=max_age
+    )
+    return response
+
+
+@app.route('/api/login/start', methods=['POST'])
+@rate_limit('login')
+async def api_login_start():
+    """Email-first login. Accounts with a paired phone continue passwordless
+    (phone code); everybody else — including unknown emails, so the answer
+    doesn't reveal whether an account exists — continues with the password."""
+    data = await request.get_json() or {}
+    email = str(data.get('email', '')).strip().lower()
+    force = bool(data.get('force', False))
+    long_session = str(data.get('client', '')).lower() in ('app', 'android', 'mobile')
+    if not email:
+        return jsonify({'success': False, 'message': 'backend.fillAllFields'}), 400
+
+    user = db_layer.get_user_by_email(email)
+    device = (user or {}).get('device')
+    locked_until = (user or {}).get('locked_until_ts', 0)
+    if not device or passwordless_locked(user['id']) or (locked_until and time.time() < locked_until):
+        return jsonify({'success': True, 'next': 'password'})
+
+    if not force and _list_active_sessions_for_user(user['id'], include_device=False):
+        return jsonify({'success': False, 'message': 'backend.sessionAlreadyActive', 'code': 'session_exists'}), 409
+
+    pending_id = create_pending_login(user, None, long_session, force)
+    return jsonify({
+        'success': False,
+        'next': 'device_code',
+        'message': 'backend.deviceCodeRequired',
+        'code': 'device_code_required',
+        'pending_id': pending_id,
+        'expires_in': LOGIN_CODE_TTL_SECONDS,
+        'device_name': device.get('name') or '',
+    }), 202
+
+
+@app.route('/api/login/verify-code', methods=['POST'])
+@rate_limit('login_code')
+async def api_login_verify_code():
+    """Second login step for accounts with a paired phone: the code the phone shows."""
+    data = await request.get_json() or {}
+    pending_id = str(data.get('pending_id', ''))
+    code = ''.join(ch for ch in str(data.get('code', '')) if ch.isdigit())
+
+    _purge_pending_logins()
+    pending = pending_logins.get(pending_id)
+    if not pending:
+        return jsonify({'success': False, 'message': 'backend.loginCodeExpired', 'code': 'expired'}), 410
+    if pending['denied']:
+        pending_logins.pop(pending_id, None)
+        return jsonify({'success': False, 'message': 'backend.loginDenied', 'code': 'denied'}), 403
+
+    # A passwordless pending has no data key until the phone attached it — the
+    # code isn't shown anywhere before that, so any guess counts as wrong.
+    if pending['dek'] is None or not secrets.compare_digest(code, pending['code']):
+        pending['attempts'] += 1
+        if pending['passwordless']:
+            passwordless_failures[pending['user_id']].append(time.time())
+        remaining = LOGIN_CODE_MAX_ATTEMPTS - pending['attempts']
+        if remaining <= 0:
+            pending_logins.pop(pending_id, None)
+            return jsonify({'success': False, 'message': 'backend.loginCodeTooManyAttempts', 'code': 'expired'}), 410
+        return jsonify({'success': False, 'message': 'backend.loginCodeInvalid',
+                        'message_params': {'count': remaining}, 'attempts_left': remaining}), 401
+
+    pending_logins.pop(pending_id, None)
+    user = db_layer.get_user_by_email(pending['email'])
+    if not user or user['id'] != pending['user_id']:
+        return jsonify({'success': False, 'message': 'backend.loginCodeExpired', 'code': 'expired'}), 410
+    result = finish_login(user, pending['dek'], pending['long_session'], pending['force'])
+    return await _login_response(result, pending['long_session'])
+
+
+@app.route('/api/login/device-lost', methods=['POST'])
+@rate_limit('password_reset')
+async def api_login_device_lost():
+    """Lost phone: password + recovery key remove the pairing so a normal
+    password login works again."""
+    data = await request.get_json() or {}
+    email = str(data.get('email', '')).strip().lower()
+    password = str(data.get('password', ''))
+    recovery_key = str(data.get('recovery_key', '')).strip()
+    if not email or not password or not recovery_key:
+        return jsonify({'success': False, 'message': 'backend.fillAllFields'}), 400
+
+    user = db_layer.get_user_by_email(email)
+    password_ok = verify_password(user['password_hash'] if user else "00" * 32 + ":" + "00" * 32, password)
+    key_ok = bool(user and user.get('recovery_key_hash')
+                  and verify_recovery_key(user['recovery_key_hash'], recovery_key))
+    if not (user and password_ok and key_ok):
+        return jsonify({'success': False, 'message': 'backend.deviceLostInvalid'}), 400
+
+    had_device = bool(user.get('device'))
+    # Kill the lost phone's session first — unpair_device would otherwise turn
+    # it into an ordinary session that keeps working.
+    _terminate_user_sessions(user['id'], only_device=True)
+    unpair_device(user)
+    logger.info("Paired phone removed via recovery key for user %s (had device: %s)", user['id'], had_device)
+    return jsonify({'success': True, 'message': 'backend.deviceUnpaired'})
+
+
+@app.route('/api/device/status', methods=['GET'])
+@login_required
+async def api_device_status():
+    user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    device = (user or {}).get('device')
+    session = _session_for_request() or {}
+    return jsonify({
+        'success': True,
+        'paired': bool(device),
+        'device_id': device['id'] if device and session.get('device') else None,
+        'device_name': device.get('name') if device else None,
+        'paired_at': device.get('paired_at') if device else None,
+        'this_device': bool(device and session.get('device')),
+        'email': request.user['email'],  # type: ignore
+    })
+
+
+@app.route('/api/device/pair', methods=['POST'])
+@rate_limit('share_manage')
+@login_required
+async def api_device_pair():
+    """Pair the calling app as the account's phone. Replaces an earlier pairing
+    (getting here already required that phone's code)."""
+    token = get_token_from_request()
+    dek = encryption_keys.get(token)
+    if not dek:
+        return jsonify({'success': False, 'message': 'backend.sessionExpired', 'requireRelogin': True}), 401
+    data = await request.get_json() or {}
+    secret = _decode_device_secret(data.get('device_secret'))
+    if not secret:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    if not user:
+        return jsonify({'success': False, 'message': 'backend.error'}), 500
+    # Drop the previous phone's session, then mark this one as the device session.
+    _terminate_user_sessions(user['id'], only_device=True)
+    device = pair_device(user, secret, str(data.get('device_name', '')), dek)
+    session = db_layer.get_session(token)
+    if session:
+        session['device'] = True
+        session['long_session'] = True
+        session['expires_at'] = (datetime.now() + timedelta(days=180)).isoformat()
+        db_layer.put_session(token, session)
+    logger.info("Phone paired for user %s", user['id'])
+    return jsonify({'success': True, 'device_id': device['id'], 'device_name': device['name']})
+
+
+@app.route('/api/device/unpair', methods=['POST'])
+@rate_limit('login')
+@login_required
+async def api_device_unpair():
+    """Remove the pairing (from the phone or the web). Requires the password."""
+    data = await request.get_json() or {}
+    user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    if not user or not verify_password(user['password_hash'], str(data.get('password', ''))):
+        return jsonify({'success': False, 'message': 'backend.invalidPassword'}), 403
+    unpair_device(user)
+    return jsonify({'success': True, 'message': 'backend.deviceUnpaired'})
+
+
+@app.route('/api/device/unlock', methods=['POST'])
+@rate_limit('device_unlock')
+async def api_device_unlock():
+    """Silent re-login of the paired phone, e.g. after a server restart wiped
+    the in-memory data keys. Proves possession of the device secret."""
+    data = await request.get_json() or {}
+    email = str(data.get('email', '')).strip().lower()
+    device_id = str(data.get('device_id', ''))
+    secret = _decode_device_secret(data.get('device_secret'))
+    user = db_layer.get_user_by_email(email) if email else None
+    device = (user or {}).get('device')
+    dek = _unwrap_device_dek(user, secret) if device and secrets.compare_digest(device_id, device.get('id', '')) else None
+    if not dek:
+        # 'not_paired' tells the app to drop its local pairing and show the login.
+        return jsonify({'success': False, 'message': 'backend.deviceNotPaired', 'code': 'not_paired'}), 403
+
+    _terminate_user_sessions(user['id'], only_device=True)
+    token = _create_session(user['id'], dek, long_session=True, device=True)
+    device['last_seen'] = datetime.now().isoformat()
+    db_layer.put_user(user['email'], user)
+    return await _login_response({
+        'success': True,
+        'message': 'backend.loginSuccess',
+        'token': token,
+        'needs_recovery_key': not user.get('recovery_key_hash'),
+        'device_paired': True,
+        'user': {'id': user['id'], 'username': user['username'], 'email': user['email']}
+    }, long_session=True)
+
+
+def _device_session_user():
+    """(user, error_response) for endpoints only the paired phone may call."""
+    session = _session_for_request() or {}
+    user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    if not user or not user.get('device') or not session.get('device'):
+        return None, (jsonify({'success': False, 'message': 'backend.deviceNotPaired', 'code': 'not_paired'}), 403)
+    return user, None
+
+
+@app.route('/api/device/login-requests', methods=['GET'])
+@login_required
+async def api_device_login_requests():
+    """Pending browser logins waiting for the code — polled by the phone."""
+    user, err = _device_session_user()
+    if err:
+        return err
+    _purge_pending_logins()
+    now_ts = time.time()
+    items = [{
+        'id': pid,
+        # Passwordless: the code only appears once this phone supplied the key.
+        'code': e['code'] if e['dek'] is not None else '',
+        'needs_key': e['dek'] is None,
+        'expires_in': int(e['expires_ts'] - now_ts),
+        'created_at': datetime.fromtimestamp(e['created_ts']).isoformat(timespec='seconds'),
+        'ip': e['ip'],
+        'client': e['user_agent'],
+    } for pid, e in sorted(pending_logins.items(), key=lambda kv: kv[1]['created_ts'])
+        if e['user_id'] == user['id'] and not e['denied']]
+    return jsonify({'success': True, 'requests': items})
+
+
+@app.route('/api/device/login-requests/<pending_id>/attach', methods=['POST'])
+@rate_limit('device_unlock')
+@login_required
+async def api_device_attach_key(pending_id):
+    """Passwordless login: the phone proves its secret, the server unwraps the
+    data key for exactly this pending sign-in (the browser still needs the code)."""
+    user, err = _device_session_user()
+    if err:
+        return err
+    pending = pending_logins.get(pending_id)
+    if not pending or pending['user_id'] != user['id'] or pending['denied']:
+        return jsonify({'success': False, 'message': 'backend.loginCodeExpired', 'code': 'expired'}), 410
+    data = await request.get_json() or {}
+    dek = _unwrap_device_dek(user, _decode_device_secret(data.get('device_secret')))
+    if not dek:
+        return jsonify({'success': False, 'message': 'backend.deviceNotPaired', 'code': 'not_paired'}), 403
+    pending['dek'] = dek
+    return jsonify({'success': True, 'code': pending['code']})
+
+
+@app.route('/api/device/login-requests/<pending_id>/deny', methods=['POST'])
+@login_required
+async def api_device_deny_login(pending_id):
+    user, err = _device_session_user()
+    if err:
+        return err
+    pending = pending_logins.get(pending_id)
+    if pending and pending['user_id'] == user['id']:
+        pending['denied'] = True
+        logger.info("Browser login denied from paired phone for user %s", user['id'])
+    return jsonify({'success': True})
 
 
 @app.route('/api/logout', methods=['POST'])
@@ -2435,6 +2884,8 @@ async def api_password_reset():
         user['encryption_salt'] = new_encryption_salt.hex()
         user['recovery_salt'] = new_recovery_salt.hex()
         user['encrypted_dek'] = new_encrypted_dek
+        # The phone's wrapped copy is of the old DEK — the pairing can't survive.
+        user.pop('device', None)
         db_layer.put_user(email, user)
 
         # Invalidate all existing sessions for this user
@@ -2635,6 +3086,7 @@ async def api_password_reset_confirm_token():
         user['recovery_key_hash'] = hash_recovery_key(new_recovery_key)
         user['recovery_salt'] = new_recovery_salt.hex()
         user['encrypted_dek'] = new_encrypted_dek
+        user.pop('device', None)
         db_layer.put_user(email, user)
 
         # Invalidate all existing sessions
