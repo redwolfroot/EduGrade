@@ -7,20 +7,21 @@
 A secure web application for teachers to manage student grades, classes, and performance tracking. Built with Python (Quart) and JavaScript.
 
 ## Screenshots
+
 ### Desktop
+
 <img width="2560" height="1485" alt="image" src="https://github.com/user-attachments/assets/e034c086-a47c-45e6-831f-159aa705f2d6" />
 <img width="2560" height="1485" alt="image" src="https://github.com/user-attachments/assets/6b1e1e72-a04e-4214-af0e-9163e10e7dbd" />
 <img width="2560" height="1485" alt="image" src="https://github.com/user-attachments/assets/61a75740-ecb7-41ca-bca7-6deffde63f15" />
 <img width="2560" height="1485" alt="image" src="https://github.com/user-attachments/assets/72cc2931-e04b-4083-b01f-9f2c9143a0cd" />
 
 ### Mobile
+
 <img width="391" height="844" alt="image" src="https://github.com/user-attachments/assets/9ad02cb3-a65c-4cac-9bff-8522759f2010" />
 <img width="391" height="844" alt="image" src="https://github.com/user-attachments/assets/7fd7f65f-0a74-4a0f-b548-81e89360ab79" />
 <img width="391" height="844" alt="image" src="https://github.com/user-attachments/assets/94ab0cd8-f65f-453a-b51b-8265103d2a68" />
 <img width="391" height="844" alt="image" src="https://github.com/user-attachments/assets/134af75a-887b-4297-ac23-1b2f90113d7b" />
 <img width="391" height="844" alt="image" src="https://github.com/user-attachments/assets/74d0f382-71f7-4bf3-aac0-100400229219" />
-
-
 
 ## Features
 
@@ -147,11 +148,11 @@ edugrade/
 
 Edit `app.py` to customize:
 
-| Setting          | Default | Description            |
-|------------------|---------|------------------------|
-| Port             | 1601    | Server port            |
-| Session Duration | 1 hour  | Login timeout          |
-| Debug Mode       | True    | Enable for development |
+| Setting          | Default | Description               |
+|------------------|---------|---------------------------|
+| Port             | 1601    | Server port               |
+| Session Duration | 1 hour  | Login timeout             |
+| Debug Mode       | True    | Enable for development    |
 | Rate Limits      | Various | Configurable per endpoint |
 
 For production, change `app.secret_key` to a secure random string.
@@ -167,6 +168,7 @@ For production, change `app.secret_key` to a secure random string.
 ## Student Access & Sharing
 
 Teachers can create secure grade shares for students:
+
 1. Select a class and subject to share
 2. Set expiration time (1 hour to 30 days)
 3. Configure visibility options (grades, averages, final grades, charts, etc.)
@@ -174,6 +176,7 @@ Teachers can create secure grade shares for students:
 5. Students access their grades using the share link and their personal PIN
 
 Students can view:
+
 - Individual grades with color-coded badges
 - Category breakdowns
 - Class averages
@@ -219,6 +222,7 @@ EduGrade includes a comprehensive attendance tracking system to help teachers mo
 ## Detailed Student View
 
 Click on any student to view:
+
 - Complete grade history with charts
 - Category-wise performance breakdown
 - Statistical analysis and trends
