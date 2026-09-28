@@ -484,6 +484,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             setTimeout(() => {
                 initTutorial();
             }, 1500);
+        } else {
+            // Gelegentlicher Spenden-Hinweis (nicht zusammen mit dem Tutorial)
+            maybeShowDonatePrompt();
         }
 
         // Attach student access button event listener after DOM is loaded and data is ready

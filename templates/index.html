@@ -1053,6 +1053,47 @@
                     </div>
                 </dialog>
 
+                <!-- Gelegentlicher Spenden-Hinweis nach dem Login (Zeitplan: donatePrompt.js) -->
+                <dialog id="donate-prompt-dialog" class="dialog w-full sm:max-w-[440px]"
+                    aria-labelledby="donate-prompt-title" aria-describedby="donate-prompt-text">
+                    <div>
+                        <header class="donate-prompt-header">
+                            <div class="donate-prompt-icon" aria-hidden="true">
+                                <svg class="lucide lucide-heart-icon lucide-heart" xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                                </svg>
+                            </div>
+                            <h2 id="donate-prompt-title" data-i18n="donatePrompt.title">Enjoying EduGrade?</h2>
+                        </header>
+                        <section class="donate-prompt-body">
+                            <p id="donate-prompt-text" data-i18n="donatePrompt.text">EduGrade is free — running the servers unfortunately isn't. If EduGrade makes your school day easier, a small donation on Ko-fi would mean a lot. It supports further development and helps cover the server costs.</p>
+                            <p class="text-xs text-gray-400" data-i18n="donatePrompt.thanks">Every amount helps. Thank you!</p>
+                        </section>
+                        <footer class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                            <button type="button" class="btn-outline" onclick="this.closest('dialog').close()"
+                                data-i18n="donatePrompt.later">Maybe later</button>
+                            <a id="donate-prompt-kofi" class="btn-primary" href="https://ko-fi.com/avocloudnet" target="_blank" rel="noopener noreferrer">
+                                <svg class="lucide lucide-coffee-icon lucide-coffee" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M10 2v2" />
+                                    <path d="M14 2v2" />
+                                    <path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1" />
+                                    <path d="M6 2v2" />
+                                </svg>
+                                <span data-i18n="donatePrompt.donate">Support on Ko-fi</span>
+                            </a>
+                        </footer>
+                        <button type="button" aria-label="Close dialog" onclick="this.closest('dialog').close()"
+                            data-tooltip="Close dialog" data-i18n-tooltip="dialog.closeDialog" data-side="top">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" class="lucide lucide-x-icon lucide-x">
+                                <path d="M18 6 6 18" />
+                                <path d="m6 6 12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </dialog>
+
                 <script>
                     // Ko-fi iframe loads on first open only — no third-party request on page load.
                     function openSupportDialog() {
@@ -2261,6 +2302,7 @@ Anna,,Schmidt</code></pre>
     <script src="/static/scripts/webuntis.js?v={{ app_version }}"></script>
     <script src="/static/scripts/moodle.js?v={{ app_version }}"></script>
     <script src="/static/scripts/appDownload.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/donatePrompt.js?v={{ app_version }}"></script>
     <script src="/static/scripts/mobile.js?v={{ app_version }}"></script>
     <script src="/static/scripts/app-promo.js?v={{ app_version }}"></script>
 
