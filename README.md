@@ -90,7 +90,7 @@ docker run -d \
 
 ```bash
 # Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/rwolf2467/EduGrade/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/redwolfroot/EduGrade/main/docker-compose.yml
 
 # Edit ports if needed (default: 1601:1601, change to 8080:1601 for external port 8080)
 nano docker-compose.yml
@@ -107,7 +107,7 @@ See [DOCKER.md](DOCKER.md) for more Docker options and production setup.
 
 ```bash
 # Clone and install
-git clone https://github.com/rwolf2467/edugrade.git
+git clone https://github.com/redwolfroot/edugrade.git
 cd edugrade
 pip install -r requirements.txt
 
@@ -260,4 +260,4 @@ Licensed under the [GNU Affero General Public License v3.0](https://www.gnu.org/
 
 ## Security Reporting
 
-Report vulnerabilities via [GitHub Issues](https://github.com/rwolf2467/EduGrade/issues).
+Report vulnerabilities via [GitHub Issues](https://github.com/redwolfroot/EduGrade/issues).
