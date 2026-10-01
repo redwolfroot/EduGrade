@@ -15,8 +15,8 @@
     <meta name="apple-mobile-web-app-title" content="EduGrade">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v=1.7.9">
     <script src="/static/scripts/resource-guard.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.10-beta.2/dist/basecoat.cdn.min.css">
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <link rel="stylesheet" href="/static/vendor/basecoat.min.css">
     <link rel="stylesheet" href="/static/css/style.css?v=1.7.9">
     <link rel="stylesheet" href="/static/css/avocloud-branding.css?v=1.7.9">
     <script src="/static/scripts/theme.js?v=1.7.9"></script>
@@ -483,8 +483,8 @@
                     </p>
                     <div class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 text-xs font-mono overflow-x-auto">
                         <p><span class="text-blue-500">default-src</span> 'self';</p>
-                        <p><span class="text-blue-500">script-src</span> 'self' cdn.jsdelivr.net;</p>
-                        <p><span class="text-blue-500">style-src</span> 'self' cdn.jsdelivr.net;</p>
+                        <p><span class="text-blue-500">script-src</span> 'self';</p>
+                        <p><span class="text-blue-500">style-src</span> 'self';</p>
                         <p><span class="text-blue-500">img-src</span> 'self' data:;</p>
                     </div>
                     <p class="text-xs mt-2" style="color: oklch(.708 0 0);">
@@ -504,7 +504,7 @@
                         <p class="text-sm mb-2"><strong class="text-green-400">Your data is encrypted with your password!</strong></p>
                         <p class="text-sm" style="color: oklch(.708 0 0);">
                             All user data (classes, students, grades) is encrypted using AES-256-GCM before being stored on the server.
-                            The encryption key is derived from your password - only you can decrypt your data.
+                            The encryption key is derived from your password. Without an active session, your password or your recovery key, the stored data cannot be decrypted.
                         </p>
                     </div>
                     <p class="text-sm mb-2"><strong>How it works:</strong></p>

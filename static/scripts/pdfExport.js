@@ -4,6 +4,32 @@
  */
 
 /**
+ * Adds the "Powered by EduGrade" footer (plus page numbers) to every page.
+ * Call right before pdf.save().
+ * @param {jsPDF} pdf - A4 portrait document
+ * @param {number} margin - Left/right margin in mm
+ */
+const addPdfBrandingFooter = (pdf, margin = 15) => {
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const pageCount = pdf.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+        pdf.setDrawColor(220, 220, 220);
+        pdf.setLineWidth(0.2);
+        pdf.line(margin, pageHeight - 11, pageWidth - margin, pageHeight - 11);
+        pdf.setFontSize(7.5);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(150, 150, 150);
+        pdf.textWithLink('Powered by EduGrade · developed by avocloud.net', margin, pageHeight - 7, { url: 'https://avocloud.net' });
+        if (pageCount > 1) {
+            pdf.text(`${i} / ${pageCount}`, pageWidth - margin, pageHeight - 7, { align: 'right' });
+        }
+    }
+    pdf.setTextColor(0, 0, 0);
+};
+
+/**
  * Export student detail view as PDF
  * @param {string} studentId - ID of the student to export
  */
@@ -406,6 +432,8 @@ const exportStudentDetailPDF = async (studentId) => {
                 });
             }
         }
+
+        addPdfBrandingFooter(pdf);
 
         // Save PDF
         const sanitizedStudentName = studentName.replace(/[^a-zA-Z0-9]/g, '_');

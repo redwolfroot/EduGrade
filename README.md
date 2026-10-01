@@ -51,7 +51,7 @@ A secure web application for teachers to manage student grades, classes, and per
 - **Encrypted Grade Shares** - Shared grade data is encrypted using a master key
 - **PBKDF2 Key Derivation** - 200k iterations for password hashing, 100k for encryption keys
 - **1-Hour Sessions** - Short-lived sessions with automatic cleanup
-- **Zero-Knowledge** - Server admins cannot read user data without the password
+- **Encrypted at rest** - Stored gradebook data cannot be decrypted without an active session, the password, the recovery key or the paired phone (the server briefly holds the key in memory while you are signed in)
 - **PIN-Protected Access** - Student grade access secured with 6-digit PINs
 - **Smart Caching** - In-memory cache with heartbeat system for performance
 - **Automatic Share Cleanup** - Expired and revoked shares are automatically removed
@@ -165,6 +165,23 @@ For production, change `app.secret_key` to a secure random string.
 3. Set `secure=True` for cookies
 4. Configure proper environment variables
 5. Set up logging and monitoring
+
+## Server Console
+
+The server has a built-in operator console: it reads commands from its own stdin, so in a hosting panel (e.g. Pterodactyl) just type `help` into the server console. Without a panel, run it separately:
+
+```bash
+docker exec -it edugrade python manage.py
+```
+
+| Command | What it does |
+|---|---|
+| `stats` | Users, sessions (web/app), paired phones, classes, shares, organisations |
+| `announce` | Wizard for a new announcement: type (info / alert / danger), title, text, optional English version, end date |
+| `announcements [all]` | List live (or all) announcements |
+| `unannounce [nr\|id\|all]` | End an announcement |
+
+Announcements appear as a dialog after login (web) or when the app is opened. Several are shown one after another, oldest first; each user sees each one until they press **OK** (on any device). Changes take effect immediately, no restart needed. Type `abbrechen` to cancel the wizard. Single commands also work non-interactively, e.g. `python manage.py stats`.
 
 ## Student Access & Sharing
 

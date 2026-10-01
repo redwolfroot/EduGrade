@@ -364,6 +364,15 @@ const loadData = async () => {
         if (response.ok) {
             appData = await response.json();
             loadSucceeded = true;
+        } else if (response.status === 403) {
+            // Data processing agreement not signed yet (or a new version)
+            const data = await response.json().catch(() => ({}));
+            if (data.dpa_required) {
+                window.location.href = '/avv/sign';
+                return false;
+            }
+            console.error("Server error loading data:", response.status);
+            showToast(t("toast.localSyncFailed"), "error");
         } else if (response.status === 401) {
             // The session cookie may still be valid but unusable (e.g. the
             // server's in-memory encryption key was cleared by a restart).

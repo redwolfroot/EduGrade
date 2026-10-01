@@ -21,11 +21,10 @@
     var ROUND = { O: 1, C: 1, D: 1 }; // letters that get an inscribed ring
 
     var TIME_SCALE = 0.6; // locked by BRANDING.md §5 — the raw timeline reads as rushed
-    var GSAP_VERSION = '3.13.0';
     var SCRIPTS = [
-        ['gsap.min.js', 'sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc'],
-        ['CustomEase.min.js', 'sha384-JCMGAgtMgo/19ttIm8BSnUFxOA5KAxaKT7jZdTDtaL0df8+CHKRo9XFCmhsvUlXG'],
-        ['DrawSVGPlugin.min.js', 'sha384-hk4mr+NXgJSfCJFF+LKzt26e6ZekZmmXAesF9r58nbaoAqB/VAlvY4T8k2plkXf+']
+        'gsap.min.js',
+        'CustomEase.min.js',
+        'DrawSVGPlugin.min.js'
     ];
     var SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -184,9 +183,7 @@
     function loadScripts(i, cb) {
         if (i >= SCRIPTS.length) { cb(); return; }
         var s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/gsap@' + GSAP_VERSION + '/dist/' + SCRIPTS[i][0];
-        s.integrity = SCRIPTS[i][1];
-        s.crossOrigin = 'anonymous';
+        s.src = '/static/vendor/' + SCRIPTS[i];
         s.onload = function () { loadScripts(i + 1, cb); };
         s.onerror = function () { finish(true); };
         document.head.appendChild(s);

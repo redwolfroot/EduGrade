@@ -240,6 +240,46 @@ def delete_user(email: str) -> None:
     _execute_write("DELETE FROM users WHERE email = ?", (email,))
 
 
+def delete_account(email: str) -> list[str]:
+    """Remove a user completely: gradebook, sessions, org membership/roster and
+    the user record. An org admin's org goes with them — unless other members
+    are left, then ValueError (admin must hand over first, like leaving).
+    Returns the deleted session tokens so the server can drop cached keys."""
+    user = get_user_by_email(email)
+    if not user:
+        return []
+    user_id = user["id"]
+    membership = get_org_membership(user_id)
+    if membership and membership["role"] == "admin" and membership["status"] == "approved":
+        if len(list_org_members(membership["org_id"])) > 1:
+            raise ValueError("org admin with other members")
+    with _write_lock:
+        with _conn:
+            tokens = [r["token"] for r in _conn.execute(
+                "SELECT token FROM sessions WHERE user_id = ?", (user_id,))]
+            _conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            _conn.execute("DELETE FROM user_meta WHERE user_id = ?", (user_id,))
+            _conn.execute("DELETE FROM user_classes WHERE user_id = ?", (user_id,))
+            if membership and membership["role"] == "admin" and membership["status"] == "approved":
+                org_id = membership["org_id"]
+                _conn.execute("DELETE FROM orgs WHERE id = ?", (org_id,))
+                _conn.execute("DELETE FROM org_members WHERE org_id = ?", (org_id,))
+                _conn.execute("DELETE FROM org_roster WHERE org_id = ?", (org_id,))
+            _conn.execute("DELETE FROM org_members WHERE user_id = ?", (user_id,))
+            _conn.execute("DELETE FROM org_roster WHERE user_id = ?", (user_id,))
+            # Shares (link + PIN), handovers in either direction and reset
+            # tokens must not outlive the account.
+            _conn.execute(
+                "DELETE FROM class_shares WHERE json_extract(doc, '$.user_id') = ?", (user_id,))
+            _conn.execute(
+                "DELETE FROM class_handovers WHERE from_user_id = ? OR to_user_id = ?",
+                (user_id, user_id))
+            _conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ? OR user_id = ?",
+                          (user_id, email))
+            _conn.execute("DELETE FROM users WHERE email = ?", (email,))
+    return tokens
+
+
 def iter_users() -> list[tuple[str, dict]]:
     """Return all users as a list of (email, user_dict) pairs."""
     rows = _conn.execute("SELECT email, doc FROM users").fetchall()
@@ -253,6 +293,31 @@ def count_users() -> int:
     """
     row = _conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()
     return row["n"] if row else 0
+
+
+def list_schools() -> list[tuple[str, int]]:
+    """Return every school name entered in a profile with its account count.
+
+    Names are grouped case-insensitively; the most common spelling wins.
+    Sorted by count (desc), then name.
+    """
+    rows = _conn.execute(
+        """
+        SELECT TRIM(json_extract(doc, '$.school')) AS name, COUNT(*) AS n
+        FROM users
+        WHERE TRIM(COALESCE(json_extract(doc, '$.school'), '')) <> ''
+        GROUP BY name
+        """
+    ).fetchall()
+    groups: dict[str, list[tuple[str, int]]] = {}
+    for row in rows:
+        groups.setdefault(row["name"].casefold(), []).append((row["name"], row["n"]))
+    schools = [
+        (max(variants, key=lambda v: v[1])[0], sum(n for _, n in variants))
+        for variants in groups.values()
+    ]
+    schools.sort(key=lambda s: (-s[1], s[0].casefold()))
+    return schools
 
 
 def increment_failed_login(email: str) -> int:
@@ -816,8 +881,8 @@ def delete_handover(token: str) -> None:
 
 
 def delete_expired_handovers(now_iso: str) -> None:
-    """Delete all pending handovers whose ``expires_at`` is before *now_iso*."""
+    """Delete every handover (any status) whose ``expires_at`` is before *now_iso*."""
     _execute_write(
-        "DELETE FROM class_handovers WHERE status = 'pending' AND expires_at < ?",
+        "DELETE FROM class_handovers WHERE expires_at < ?",
         (now_iso,),
     )

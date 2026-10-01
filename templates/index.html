@@ -19,26 +19,14 @@
     <meta name="apple-mobile-web-app-title" content="EduGrade">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v={{ app_version }}">
     <script src="/static/scripts/resource-guard.js?v={{ app_version }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"
-        crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.10-beta.2/dist/basecoat.cdn.min.css"
-        integrity="sha384-6dC3cDSMqy9z8ebhUdgkcvps0xEecjrA8dH320F43+mp8jEVgjsCiWRAjGTeLK6v"
-        crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.10-beta.2/dist/js/all.min.js"
-        integrity="sha384-4km2iBe4ctopbIOD4zwPsKKoMQsTsYGXAnxBpgIalcQgzegu7w4e+JZMt/BbzScI"
-        crossorigin="anonymous" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"
-        integrity="sha384-Sse/HDqcypGpyTDpvZOJNnG0TT3feGQUkF9H+mnRvic+LjR+K1NhTt8f51KIQ3v3"
-        crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"
-        integrity="sha384-cVMg8E3QFwTvGCDuK+ET4PD341jF3W8nO1auiXfuZNQkzbUUiBGLsIQUE+b1mxws"
-        crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"
-        integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
-        crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"
-        integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H"
-        crossorigin="anonymous"></script>
+    <script src="/static/scripts/domain-move.js?v={{ app_version }}"></script>
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <link rel="stylesheet" href="/static/vendor/basecoat.min.css">
+    <script src="/static/vendor/basecoat-all.min.js" defer></script>
+    <script src="/static/vendor/chart.umd.min.js"></script>
+    <script src="/static/vendor/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="/static/vendor/jspdf.umd.min.js"></script>
+    <script src="/static/vendor/html2canvas.min.js"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
     <link rel="stylesheet" href="/static/css/avocloud-branding.css?v={{ app_version }}">
     <link rel="stylesheet" href="/static/css/mobile.css?v={{ app_version }}">
@@ -158,13 +146,31 @@
             id: '{{ user.id }}',
             username: "{{ user.username }}",
             email: "{{ user.email }}",
-            account_type: "{{ user.account_type }}"
+            account_type: "{{ user.account_type }}",
+            school: {{ (user.school or '') | tojson }}
         };
         window.appVersion = '{{ app_version }}';
         window.appBuildDate = '{{ build_date }}';
     </script>
 
     <div id="toaster" class="toaster"></div>
+
+    <!-- Entwickler-Ankündigungen nach dem Login — außerhalb von #app, damit er auch auf der Einrichtungsseite sichtbar ist (announcement.js, erstellt in der Server-Konsole: python manage.py) -->
+    <dialog id="announcement-dialog" class="dialog w-full sm:max-w-[440px]" data-level="info"
+        aria-labelledby="announcement-title" aria-describedby="announcement-text">
+        <div>
+            <header class="announcement-header">
+                <div class="announcement-icon" id="announcement-icon" aria-hidden="true"></div>
+                <h2 id="announcement-title"></h2>
+            </header>
+            <section class="announcement-body">
+                <p id="announcement-text"></p>
+            </section>
+            <footer class="flex justify-center">
+                <button type="button" class="btn-primary is-cta announcement-ok" id="announcement-ok" data-i18n="announcement.ok">OK</button>
+            </footer>
+        </div>
+    </dialog>
 
     <div id="app">
         <!-- Mobile-only header: shows the EduGrade logo and a documentation
@@ -214,6 +220,12 @@
                                 <p class="text-gray-400 text-sm" data-i18n="setup.welcomeSubtext">
                                     Great to have you here! Let's set up
                                     your first classroom.</p>
+                            </div>
+                            <div class="grid gap-2">
+                                <label for="setup-school"><span data-i18n="profile.school">School</span> <span class="text-red-500" aria-hidden="true">*</span></label>
+                                <input type="text" id="setup-school" class="input" data-i18n-placeholder="profile.schoolPlaceholder" placeholder="Your school name" data-icon="school" required maxlength="120" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="setup-school-suggestions">
+                                <ul id="setup-school-suggestions" class="school-suggestions hidden" role="listbox"></ul>
+                                <p class="text-gray-400 text-sm" data-i18n="profile.schoolHint">Name of your school or educational institution. Schools your colleagues already entered are suggested while you type.</p>
                             </div>
                             <div class="grid gap-2">
                                 <label for="class-name" data-i18n="setup.className">Class name (e.g., "1A")</label>
@@ -447,6 +459,11 @@
                                             </svg>
                                             <span data-i18n="nav.docs">Documentation</span>
                                         </a>
+                                        <button type="button" id="legal-btn" class="btn-ghost w-full" style="justify-content: flex-start;"
+                                            onclick="document.getElementById('legal-dialog').showModal()">
+                                            <svg class="lucide lucide-scale-icon lucide-scale" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+                                            <span data-i18n="nav.legal">Legal</span>
+                                        </button>
                                         <button type="button" id="app-download-btn" class="btn-ghost w-full" style="justify-content: flex-start;">
                                             <svg class="lucide lucide-smartphone-icon lucide-smartphone" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
@@ -645,10 +662,12 @@
                                 <p class="text-gray-400 text-sm" data-i18n="profile.displayNameHint">This name will be shown in the greeting message.</p>
                             </div>
                             <!-- School -->
-                            <div class="grid gap-2">
-                                <label for="profile-school" class="text-sm font-medium" data-i18n="profile.school">School</label>
-                                <input type="text" id="profile-school" class="input" data-i18n-placeholder="profile.schoolPlaceholder" placeholder="Your school name" data-icon="school">
-                                <p class="text-gray-400 text-sm" data-i18n="profile.schoolHint">Optional: Name of your school or educational institution.</p>
+                            <div class="grid gap-2" id="profile-school-field">
+                                <p id="profile-school-required" class="school-required-notice hidden" role="alert" data-i18n="profile.schoolRequiredNotice">Please enter your school to continue using EduGrade.</p>
+                                <label for="profile-school" class="text-sm font-medium"><span data-i18n="profile.school">School</span> <span class="text-red-500" aria-hidden="true">*</span></label>
+                                <input type="text" id="profile-school" class="input" data-i18n-placeholder="profile.schoolPlaceholder" placeholder="Your school name" data-icon="school" required maxlength="120" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="profile-school-suggestions">
+                                <ul id="profile-school-suggestions" class="school-suggestions hidden" role="listbox"></ul>
+                                <p class="text-gray-400 text-sm" data-i18n="profile.schoolHint">Name of your school or educational institution. Schools your colleagues already entered are suggested while you type.</p>
                             </div>
                             <!-- Organisation -->
                             <div class="grid gap-2">
@@ -961,9 +980,8 @@
                             <p data-i18n="support.description">EduGrade is free. Hosting is not. A tip keeps the lights on — thank you!</p>
                         </header>
                         <section>
-                            <iframe data-src="https://ko-fi.com/avocloudnet/?hidefeed=true&amp;widget=true&amp;embed=true&amp;preview=true"
-                                title="avocloudnet" height="712"
-                                style="border:none;width:100%;padding:4px;background:#f9f9f9;border-radius:var(--radius);"></iframe>
+                            <a class="btn" href="https://ko-fi.com/avocloudnet" target="_blank" rel="noopener noreferrer" data-i18n="support.open">Open Ko-fi</a>
+                            <p class="text-xs text-gray-400 mt-2" data-i18n="support.externalNote">Opens ko-fi.com in a new tab. Nothing is loaded from Ko-fi until you click.</p>
                         </section>
                         <footer class="flex justify-end gap-2">
                             <button type="button" class="btn-outline" onclick="this.closest('dialog').close()"
@@ -980,6 +998,27 @@
                         </button>
                     </div>
                 </dialog>
+                <!-- Legal: all legal documents in one place -->
+                <dialog id="legal-dialog" class="dialog w-full sm:max-w-[420px]" aria-labelledby="legal-title">
+                    <div>
+                        <header>
+                            <h2 id="legal-title" data-i18n="nav.legal">Legal</h2>
+                            <p data-i18n="legal.description">Privacy, contracts and provider information.</p>
+                        </header>
+                        <section class="flex flex-col gap-2">
+                            <a class="btn-outline w-full" style="justify-content: flex-start;" href="/privacy" target="_blank"><span data-i18n="legal.privacy">Privacy policy</span></a>
+                            <a class="btn-outline w-full" style="justify-content: flex-start;" href="/terms" target="_blank"><span data-i18n="legal.terms">Terms of service</span></a>
+                            <a class="btn-outline w-full" style="justify-content: flex-start;" href="/avv" target="_blank"><span data-i18n="legal.dpa">Data processing agreement (DPA)</span></a>
+                            <a class="btn-outline w-full" style="justify-content: flex-start;" href="/avv#anlage-1" target="_blank"><span data-i18n="legal.toms">Technical and organisational measures (TOMs)</span></a>
+                            <a class="btn-outline w-full" style="justify-content: flex-start;" href="/avv#anlage-2" target="_blank"><span data-i18n="legal.subprocessors">Sub-processors</span></a>
+                            <a class="btn-outline w-full" style="justify-content: flex-start;" href="https://avocloud.net/impressum/" target="_blank" rel="noopener noreferrer"><span data-i18n="legal.imprint">Imprint</span></a>
+                        </section>
+                        <footer class="flex justify-end gap-2">
+                            <button type="button" class="btn-outline" onclick="this.closest('dialog').close()" data-i18n="dialog.close">Close</button>
+                        </footer>
+                    </div>
+                </dialog>
+
                 <!-- App-Download: Android → QR-Code zur neuesten APK, iOS gesperrt → Ko-fi -->
                 <dialog id="app-download-dialog" class="dialog w-full sm:max-w-[480px]"
                     aria-labelledby="app-download-title">
@@ -1095,12 +1134,9 @@
                 </dialog>
 
                 <script>
-                    // Ko-fi iframe loads on first open only — no third-party request on page load.
+                    // Ko-fi is only linked, never embedded: no third-party request unless the user clicks.
                     function openSupportDialog() {
-                        const dlg = document.getElementById('support-dialog');
-                        const frame = dlg.querySelector('iframe');
-                        if (!frame.src) frame.src = frame.dataset.src;
-                        dlg.showModal();
+                        document.getElementById('support-dialog').showModal();
                     }
                 </script>
 
@@ -1200,6 +1236,22 @@
                                     <p class="text-2xl font-bold" id="stat-total-grades">0</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-4 p-4">
+                            <div class="p-3 rounded-lg bg-blue-100 self-start">
+                                <svg class="text-blue-600 lucide lucide-shield-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold" data-i18n="parentInfo.cardTitle">Data protection notice for parents</h3>
+                                <p class="text-gray-400 text-sm" data-i18n="parentInfo.cardText">A printable information sheet about how grades are stored in EduGrade.</p>
+                            </div>
+                            <button type="button" id="parent-info-btn" class="btn-outline shrink-0">
+                                <svg class="lucide lucide-printer" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                                <span data-i18n="parentInfo.cardButton">Create PDF</span>
+                            </button>
                         </div>
                     </div>
                 </section>
@@ -2295,14 +2347,17 @@ Anna,,Schmidt</code></pre>
     <script src="/static/scripts/dataManagement.js?v={{ app_version }}"></script>
     <script src="/static/scripts/render.js?v={{ app_version }}"></script>
     <script src="/static/scripts/pdfExport.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/parentInfo.js?v={{ app_version }}"></script>
     <script src="/static/scripts/exportImport.js?v={{ app_version }}"></script>
     <script src="/static/scripts/tutorial.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/schoolField.js?v={{ app_version }}"></script>
     <script src="/static/scripts/eventListeners.js?v={{ app_version }}"></script>
     <script src="/static/scripts/organisation.js?v={{ app_version }}"></script>
     <script src="/static/scripts/webuntis.js?v={{ app_version }}"></script>
     <script src="/static/scripts/moodle.js?v={{ app_version }}"></script>
     <script src="/static/scripts/appDownload.js?v={{ app_version }}"></script>
     <script src="/static/scripts/donatePrompt.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/announcement.js?v={{ app_version }}"></script>
     <script src="/static/scripts/mobile.js?v={{ app_version }}"></script>
     <script src="/static/scripts/app-promo.js?v={{ app_version }}"></script>
 
@@ -2403,7 +2458,8 @@ Anna,,Schmidt</code></pre>
                 const schoolInput = document.getElementById('profile-school');
                 const languageInput = document.getElementById('profile-language');
                 if (teacherNameInput) teacherNameInput.value = appData.teacherName || '';
-                if (schoolInput) schoolInput.value = appData.school || '';
+                if (schoolInput) schoolInput.value = window.currentUser.school || appData.school || '';
+                document.getElementById('profile-school-required')?.classList.toggle('hidden', !profileDialog.hasAttribute('data-school-required'));
                 if (languageInput) { languageInput.value = appData.language || 'en'; updateLanguageBtnStyles(); }
 
                 // Load school type selection
@@ -2473,6 +2529,7 @@ Anna,,Schmidt</code></pre>
             updateAccentSwatchActive();
 
             document.getElementById('profile-btn').addEventListener('click', openProfileDialog);
+            window.openProfileDialog = openProfileDialog;
 
             // Avatar helpers
             const generateRandomGradient = () => {
@@ -2570,11 +2627,29 @@ Anna,,Schmidt</code></pre>
                     return;
                 }
 
+                // School is mandatory
+                if (!school) {
+                    const schoolInput = document.getElementById('profile-school');
+                    document.getElementById('profile-school-required')?.classList.remove('hidden');
+                    schoolInput.scrollIntoView({ block: 'center' });
+                    schoolInput.focus();
+                    return;
+                }
+
                 setButtonLoading(btn, true, t('error.saving'));
+
+                // School lives on the account (not in appData) so colleagues get it suggested
+                try {
+                    await saveSchool(school);
+                } catch (error) {
+                    console.error('Saving school failed:', error);
+                    setButtonLoading(btn, false);
+                    showAlertDialog(t('error.savingData'));
+                    return;
+                }
 
                 // Update appData
                 appData.teacherName = teacherName;
-                appData.school = school;
                 appData.language = language;
 
                 // Apply pending avatar changes

@@ -192,7 +192,8 @@
         addPill(rel); // always reachable
         var got = gotVersion() >= code;
         var seen = seenThisSession(code);
-        if (!got && !seen) openModal(rel);
+        // Not on top of the domain-move notice; the pill keeps it one tap away.
+        if (!got && !seen && !document.querySelector('.domain-move-ov')) openModal(rel);
       })
       .catch(function () { /* offline / not published — stay silent */ });
   }

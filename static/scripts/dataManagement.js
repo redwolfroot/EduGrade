@@ -682,11 +682,14 @@ const percentToGrade = (percent) => {
         { grade: 5, minPercent: 0, maxPercent: 39 }
     ];
 
-    // Passenden Bereich finden
-    for (const range of ranges) {
-        if (p >= range.minPercent && p <= range.maxPercent) {
-            return range.grade;
-        }
+    // Höchster Bereich, dessen Untergrenze erreicht ist: die Grenzen sind ganze
+    // Zahlen (85–100, 70–84, …), 84,6 % liegt also zwischen zwei Bereichen und
+    // muss trotzdem die 2 ergeben, nicht die Ersatz-5. Gleiche Regel wie die App.
+    const reached = [...ranges]
+        .sort((a, b) => b.minPercent - a.minPercent)
+        .find(range => p >= range.minPercent);
+    if (reached) {
+        return reached.grade;
     }
 
     // Falls kein Bereich passt, Note 5 zurückgeben

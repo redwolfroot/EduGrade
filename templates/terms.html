@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de" data-title-de="Nutzungsbedingungen - EduGrade" data-title-en="Terms of Service - EduGrade">
 
 <head>
     <meta charset="UTF-8">
@@ -15,10 +15,12 @@
     <meta name="apple-mobile-web-app-title" content="EduGrade">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v={{ app_version }}">
     <script src="/static/scripts/resource-guard.js?v={{ app_version }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.10-beta.2/dist/basecoat.cdn.min.css" integrity="sha384-6dC3cDSMqy9z8ebhUdgkcvps0xEecjrA8dH320F43+mp8jEVgjsCiWRAjGTeLK6v" crossorigin="anonymous">
+    <script src="/static/scripts/domain-move.js?v={{ app_version }}"></script>
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <link rel="stylesheet" href="/static/vendor/basecoat.min.css">
     <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
     <link rel="stylesheet" href="/static/css/avocloud-branding.css?v={{ app_version }}">
+    <script src="/static/scripts/legal-lang.js?v={{ app_version }}"></script>
     <script src="/static/scripts/theme.js?v={{ app_version }}"></script>
     <style>
         html,
@@ -52,485 +54,35 @@
             margin-right: 0.75rem;
             flex-shrink: 0;
         }
+        .pp p, .pp li { color: oklch(.708 0 0); }
+        .pp ul { list-style: disc; padding-left: 1.25rem; }
+        .pp li { margin-top: 0.35rem; }
+        .pp h4 { font-weight: 600; margin-top: 1rem; margin-bottom: 0.25rem; }
+        .pp a { color: rgb(96 165 250); }
+        .pp a:hover { text-decoration: underline; }
     </style>
 </head>
 
 <body>
-    <div id="app" class="max-w-4xl mx-auto">
-        <!-- Header -->
-        <header class="flex items-center justify-between mb-8">
-            <div class="flex items-center gap-3">
-                <a href="/" class="btn-outline flex items-center gap-2">
-                    <svg class="lucide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6" />
-                    </svg>
-                    Back to App
-                </a>
-            </div>
-            <h1 class="text-2xl font-bold">Terms of Service</h1>
+    <div id="app" class="mx-auto px-4 sm:px-10 lg:px-16 py-6" style="max-width: 60rem;">
+        <header class="flex items-center justify-between gap-2 mb-8">
+            <a href="/" class="btn-outline flex items-center gap-2">
+                <svg class="lucide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6" />
+                </svg>
+                <span data-lang-inline="de">Zurück zur App</span><span data-lang-inline="en">Back to app</span>
+            </a>
+            <div class="legal-lang-switch" role="group" aria-label="Language"><button type="button" data-set-lang="de">DE</button><button type="button" data-set-lang="en">EN</button></div>
         </header>
 
-        <!-- Hero Section -->
-        <section class="card hero-gradient text-white mb-8">
-            <div class="p-8 text-center">
-                <svg class="lucide mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 64px; height: 64px;">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <h2 class="text-4xl font-bold mb-4">Terms of Service</h2>
-                <p class="text-xl opacity-90 mb-2">EduGrade Usage Agreement</p>
-                <p class="text-sm opacity-70">Last Updated: February 2026</p>
-            </div>
-        </section>
+        <div data-lang-block="de">
+{% include '_terms_de.html' %}
+        </div>
+        <div data-lang-block="en">
+{% include '_terms_en.html' %}
+        </div>
 
-        <!-- Introduction -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold">Welcome to EduGrade</h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);">
-                    These Terms of Service ("Terms") govern your use of EduGrade, a grade management system developed by Fabian Murauer (AvoCloud.net) as a semester final project commissioned by HTL Traun. By registering for and using EduGrade, you agree to be bound by these Terms.
-                </p>
-                <p class="mt-3 font-semibold text-yellow-400">
-                    Please read these Terms carefully before using the service. If you do not agree with any part of these Terms, you may not use EduGrade.
-                </p>
-            </section>
-        </section>
-
-        <!-- 1. Acceptance of Terms -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">1</span>
-                    <span>Acceptance of Terms</span>
-                </h3>
-            </header>
-            <section>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>By creating an account, you confirm that you are at least 18 years old or have parental/guardian consent to use this service.</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>You agree to provide accurate, current, and complete information during registration.</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>You are responsible for maintaining the confidentiality of your account credentials.</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>You accept all risks associated with unauthorized access to your account.</span>
-                    </li>
-                </ul>
-            </section>
-        </section>
-
-        <!-- 2. Service Description -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">2</span>
-                    <span>Service Description</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);" class="mb-3">
-                    EduGrade is an educational tool designed for teachers to:
-                </p>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>Manage student grades and academic records</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>Organize classes and categories</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>Generate performance statistics and analytics</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>Export and import data for backup purposes</span>
-                    </li>
-                </ul>
-                <p style="color: oklch(.708 0 0);" class="mt-3">
-                    This is a semester project and is provided primarily for educational and demonstration purposes.
-                </p>
-            </section>
-        </section>
-
-        <!-- 3. User Responsibilities -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">3</span>
-                    <span>User Responsibilities</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);" class="mb-3">You agree to:</p>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>Use EduGrade only for lawful educational purposes</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>Comply with all applicable data protection laws (GDPR, DSGVO)</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>Not attempt to gain unauthorized access to the system or other user accounts</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>Not use the service to store or transmit malicious code or harmful content</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>Regularly backup your data using the export functionality</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>Keep your password secure and notify us immediately of any unauthorized access</span>
-                    </li>
-                </ul>
-            </section>
-        </section>
-
-        <!-- 4. Data Protection and Privacy -->
-        <section class="card mb-6 border-2 border-yellow-500/30">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">4</span>
-                    <span>Data Protection and Privacy</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);" class="mb-3">
-                    <strong class="text-yellow-400">Important:</strong> You are responsible for the personal data you enter into EduGrade.
-                </p>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-yellow-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>Student data (names, grades) is your responsibility under GDPR/DSGVO</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-yellow-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>You must obtain necessary consents before entering personal data</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-yellow-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>You must inform students/parents about data processing in accordance with GDPR</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-yellow-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>EduGrade stores data in JSON format on the server - ensure compliance with your institution's data policies</span>
-                    </li>
-                </ul>
-                <p class="mt-3" style="color: oklch(.708 0 0);">
-                    For detailed information on how we process data, please read our <a href="/privacy" class="text-blue-400 hover:underline">Privacy Policy</a>.
-                </p>
-            </section>
-        </section>
-
-        <!-- 5. License and Open Source -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">5</span>
-                    <span>License and Open Source</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);" class="mb-3">
-                    EduGrade is free and open-source software licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-                </p>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>You may use, study, and modify the software</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>You may share modified versions under the same license</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>Source code is available at: <a href="https://github.com/rwolf2467/EduGrade" class="text-blue-400 hover:underline" target="_blank" rel="noopener">GitHub Repository</a></span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-red-400"><svg class="lucide lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
-                        <span>You may not make the software proprietary or closed-source</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-red-400"><svg class="lucide lucide-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
-                        <span>Commercial use requires compliance with AGPL-3.0</span>
-                    </li>
-                </ul>
-            </section>
-        </section>
-
-        <!-- 6. Service Availability -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">6</span>
-                    <span>Service Availability</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);" class="mb-3">
-                    As a student project:
-                </p>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>We strive to maintain service availability but cannot guarantee 100% uptime</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>The service may be temporarily unavailable for maintenance or updates</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>We reserve the right to modify, suspend, or discontinue the service at any time</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>We will provide reasonable notice before any planned service interruption</span>
-                    </li>
-                </ul>
-            </section>
-        </section>
-
-        <!-- 7. Disclaimers and Limitations -->
-        <section class="card mb-6 border-2 border-red-500/30">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">7</span>
-                    <span>Disclaimers and Limitations</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);" class="mb-3">
-                    <strong class="text-red-400">IMPORTANT - PLEASE READ CAREFULLY:</strong>
-                </p>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-red-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>The service is provided "AS IS" without warranties of any kind</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-red-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>We are not liable for any data loss, system failures, or service interruptions</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-red-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>You are solely responsible for backing up your data regularly</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-red-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>We are not responsible for any decisions made based on data in EduGrade</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-red-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>This is an educational project and should not be used as the sole source for official grade records</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-red-400 mt-1"><svg class="lucide lucide-triangle-alert" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
-                        <span>Maximum liability is limited to the fees paid (which is €0, as the service is free)</span>
-                    </li>
-                </ul>
-            </section>
-        </section>
-
-        <!-- 8. Account Termination -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">8</span>
-                    <span>Account Termination</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);" class="mb-3">
-                    <strong>Your Rights:</strong>
-                </p>
-                <ul class="space-y-2 mb-4" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>You may delete your account at any time through the application settings</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>Account deletion is permanent and cannot be undone</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>Export your data before deletion to prevent loss</span>
-                    </li>
-                </ul>
-                <p style="color: oklch(.708 0 0);" class="mb-3">
-                    <strong>Our Rights:</strong>
-                </p>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>We may suspend or terminate accounts that violate these Terms</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-blue-400 mt-1">•</span>
-                        <span>We may terminate inactive accounts after 12 months of inactivity with prior notice</span>
-                    </li>
-                </ul>
-            </section>
-        </section>
-
-        <!-- 9. Security -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">9</span>
-                    <span>Security</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);" class="mb-3">
-                    EduGrade implements security measures including:
-                </p>
-                <ul class="space-y-2" style="color: oklch(.708 0 0);">
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span><strong>AES-256-GCM data encryption</strong> - All your data is encrypted with a key derived from your password</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>PBKDF2 password hashing with 200,000 iterations and 32-byte salt</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>PBKDF2 encryption key derivation with 100,000 iterations</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>Session-based authentication with 1-hour expiration</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>CSRF protection and secure cookie settings</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500"><svg class="lucide lucide-check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em"><path d="M20 6 9 17l-5-5"/></svg></span>
-                        <span>Content Security Policy (CSP) headers</span>
-                    </li>
-                </ul>
-                <p class="mt-3" style="color: oklch(.708 0 0);">
-                    However, no system is 100% secure. You must use strong, unique passwords and report any security concerns immediately.
-                </p>
-            </section>
-        </section>
-
-        <!-- 10. Changes to Terms -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">10</span>
-                    <span>Changes to Terms</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);">
-                    We reserve the right to modify these Terms at any time. Changes will be posted on this page with an updated "Last Updated" date. Continued use of the service after changes constitutes acceptance of the modified Terms.
-                </p>
-            </section>
-        </section>
-
-        <!-- 11. Governing Law -->
-        <section class="card mb-6">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-start">
-                    <span class="section-number">11</span>
-                    <span>Governing Law</span>
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);">
-                    These Terms are governed by the laws of Austria. Any disputes shall be subject to the exclusive jurisdiction of the courts in Oberösterreich, Austria.
-                </p>
-            </section>
-        </section>
-
-        <!-- Contact -->
-        <section class="card mb-6 bg-blue-500/10">
-            <header class="mb-4">
-                <h3 class="text-xl font-semibold flex items-center gap-2">
-                    <svg class="lucide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    Questions or Concerns?
-                </h3>
-            </header>
-            <section>
-                <p style="color: oklch(.708 0 0);">
-                    If you have questions about these Terms, please contact:
-                </p>
-                <p class="mt-2">
-                    <strong>Fabian Murauer</strong><br>
-                    AvoCloud.net<br>
-                    Email: <a href="mailto:fabian.murauer@avocloud.net" class="text-blue-400 hover:underline">fabian.murauer@avocloud.net</a><br>
-                    GitHub: <a href="https://github.com/rwolf2467/EduGrade" class="text-blue-400 hover:underline" target="_blank" rel="noopener">@rwolf2467</a>
-                </p>
-            </section>
-        </section>
-
-        <!-- Agreement Box -->
-        <section class="card mb-6 border-2 border-green-500/30 bg-green-500/5">
-            <section>
-                <div class="flex items-start gap-3">
-                    <svg class="lucide text-green-400 mt-1 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                        <p class="font-semibold mb-2">By Creating an Account:</p>
-                        <p style="color: oklch(.708 0 0);">
-                            You acknowledge that you have read, understood, and agree to be bound by these Terms of Service. You also confirm that you have read and understood our Privacy Policy and consent to the processing of your data as described therein.
-                        </p>
-                    </div>
-                </div>
-            </section>
-        </section>
-
-        <!-- Footer -->
-        <footer class="text-center py-8" style="color: oklch(.708 0 0);">
-            <p class="mb-3 font-semibold" style="font-family: 'Syne', sans-serif; font-size: 1.1rem;">EduGrade</p>
-            <p class="text-sm mb-1">Developed by <strong>Fabian Murauer</strong></p>
-            <div class="flex justify-center mt-2">
-                <a class="avocloud-logo" href="https://avocloud.net" target="_blank" rel="noopener" aria-label="AVOCLOUD.NET">
-                    <span class="avocloud-logo__slot">
-                        <span class="avocloud-logo__icon">
-                            <svg viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="5.5" style="color: currentColor;">
-                                <path d="M22 18 L12 18 L12 54 L22 54 M50 18 L60 18 L60 54 L50 54 M26 30 L33 36 L26 42"/>
-                                <rect x="40" y="28" width="4" height="16" rx="2" fill="#FF6B4A" stroke="none"/>
-                            </svg>
-                        </span>
-                        <span class="avocloud-logo__av">AVO</span>
-                    </span>
-                    <span class="avocloud-logo__rest-wrap">
-                        <span class="avocloud-logo__rest">CLOUD<span class="avocloud-logo__dot">.NET</span></span>
-                    </span>
-                </a>
-            </div>
-            <p class="text-sm mt-4">
-                <a href="/" class="underline hover:no-underline">Back to Application</a> |
-                <a href="/privacy" class="underline hover:no-underline">Privacy Policy</a> |
-                <a href="/about" class="underline hover:no-underline">About</a>
-            </p>
-        </footer>
+{% include '_legal_footer.html' %}
     </div>
     <script src="/static/scripts/avocloud-logo.js"></script>
     <script>

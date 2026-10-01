@@ -2,11 +2,24 @@
 document.getElementById("setup-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const classNameInput = document.getElementById("class-name").value;
+    const school = document.getElementById("setup-school").value.trim();
+    if (!school) {
+        document.getElementById("setup-school").focus();
+        return;
+    }
 
     // Validate class name
     const classValidation = validateStringInput(classNameInput, 50);
     if (!classValidation.isValid) {
         showAlertDialog(classValidation.error);
+        return;
+    }
+
+    try {
+        await saveSchool(school);
+    } catch (error) {
+        console.error('Saving school failed:', error);
+        showAlertDialog(t('error.savingData'));
         return;
     }
 
@@ -479,22 +492,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         showHomeView();
         I18n.applyI18nToDOM();
 
-        // Tutorial fuer wiederkehrende User anzeigen (falls nicht abgeschlossen)
-        if (appData.tutorial && !appData.tutorial.completed && !appData.tutorial.neverShowAgain) {
-            setTimeout(() => {
-                initTutorial();
-            }, 1500);
-        } else {
-            // Gelegentlicher Spenden-Hinweis (nicht zusammen mit dem Tutorial)
-            maybeShowDonatePrompt();
-        }
+        // Erst fehlende Schule nachtragen lassen, dann Entwickler-Ankuendigungen
+        // (nacheinander), danach Tutorial bzw. Spenden-Hinweis
+        ensureSchoolSet().then(maybeShowAnnouncements).finally(() => {
+            // Tutorial fuer wiederkehrende User anzeigen (falls nicht abgeschlossen)
+            if (appData.tutorial && !appData.tutorial.completed && !appData.tutorial.neverShowAgain) {
+                setTimeout(() => {
+                    initTutorial();
+                }, 1500);
+            } else {
+                // Gelegentlicher Spenden-Hinweis (nicht zusammen mit dem Tutorial)
+                maybeShowDonatePrompt();
+            }
+        });
 
         // Attach student access button event listener after DOM is loaded and data is ready
         document.getElementById("student-access-btn").addEventListener("click", window.openStudentAccessDialog);
     } else {
         // No classes found — show setup screen for new users
+        const setupSchool = document.getElementById("setup-school");
+        if (setupSchool) setupSchool.value = window.currentUser.school || appData.school || '';
         document.getElementById("setup-page").classList.remove("hidden");
         document.getElementById("dashboard").classList.add("hidden");
+        maybeShowAnnouncements();
     }
 
     // Signal that data is loaded so the profile avatar can render with correct saved gradient
@@ -638,4 +658,11 @@ document.addEventListener("pointerdown", (e) => {
     svg.classList.remove("icon-shake");
     void svg.offsetWidth;
     svg.classList.add("icon-shake");
+});
+
+// ============ Parent information PDF ============
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#parent-info-btn')) {
+        openParentInfoDialog();
+    }
 });

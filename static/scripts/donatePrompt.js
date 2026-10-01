@@ -8,7 +8,7 @@
 //   - donate button clicked    -> again after AFTER_DONATE_DAYS
 // At most once per browser session, and never on top of another dialog.
 
-const DONATE_FIRST_DELAY_DAYS = 14;
+const DONATE_FIRST_DELAY_DAYS = 2;
 const DONATE_REMIND_DAYS = 30;
 const DONATE_AFTER_DONATE_DAYS = 180;
 const DONATE_SESSION_KEY = 'edugrade_donate_prompt_checked';
@@ -35,7 +35,7 @@ const maybeShowDonatePrompt = () => {
     // Let the dashboard settle first; skip if something else is already asking
     // for attention (update dialog, app promo, tutorial) — it'll come next session.
     setTimeout(() => {
-        if (document.querySelector('dialog[open], .apk-promo-ov, .tutorial-prompt')) return;
+        if (document.querySelector('dialog[open], .apk-promo-ov, .tutorial-prompt, .domain-move-ov')) return;
         const dialog = document.getElementById('donate-prompt-dialog');
         dialog.dataset.donated = '';
         dialog.showModal();

@@ -22,6 +22,7 @@ JSON-based database implementation
 """
 
 import json
+import html
 import hashlib
 import secrets
 import functools
@@ -30,6 +31,7 @@ import os
 import time
 import smtplib
 import asyncio
+import ssl
 import logging
 import db as db_layer
 import docs_render
@@ -40,7 +42,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from quart import Quart, render_template, request, jsonify, redirect, url_for, make_response, send_file
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -272,13 +274,27 @@ MASTER_SHARE_KEY = _get_or_create_master_share_key()
 # Heartbeat timeout in seconds - cache is cleared if no heartbeat received
 HEARTBEAT_TIMEOUT = 60
 
-def derive_encryption_key(password: str, salt: bytes) -> bytes:
+# PBKDF2 work factors. The data key *is* the password-derived key, so its
+# iteration count can only change together with a re-encryption (password
+# set/reset). Each account therefore stores its own count (`kdf_iterations`,
+# missing = legacy) and new keys use the current OWASP-recommended value.
+KDF_ITERATIONS_LEGACY = 100_000
+KDF_ITERATIONS_CURRENT = 600_000
+PASSWORD_HASH_ITERATIONS_LEGACY = 200_000
+PASSWORD_HASH_ITERATIONS_CURRENT = 600_000
+
+
+def user_kdf_iterations(user: dict | None) -> int:
+    return int((user or {}).get('kdf_iterations') or KDF_ITERATIONS_LEGACY)
+
+
+def derive_encryption_key(password: str, salt: bytes, iterations: int = KDF_ITERATIONS_LEGACY) -> bytes:
     """Derive a 256-bit encryption key from password using PBKDF2"""
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,  # 256 bits for AES-256
         salt=salt,
-        iterations=100000,  # Fewer iterations than password hash since this runs on every login
+        iterations=iterations,
     )
     return kdf.derive(password.encode())
 
@@ -359,24 +375,39 @@ def decrypt_share_data(encrypted_data: str, key: bytes) -> dict:
         return {}
 
 def hash_password(password: str) -> str:
-    """Hash password using PBKDF2 with enhanced security"""
-    salt = secrets.token_bytes(32) 
-    hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 200000)
-    return f"{salt.hex()}:{hashed.hex()}"
+    """Hash password with PBKDF2; the iteration count is part of the stored value
+    ("pbkdf2_sha256$<iterations>$<salt>$<hash>") so it can be raised later."""
+    salt = secrets.token_bytes(32)
+    iterations = PASSWORD_HASH_ITERATIONS_CURRENT
+    hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${hashed.hex()}"
+
+
+def _parse_password_hash(stored_password: str) -> tuple[int, bytes, str]:
+    """Return (iterations, salt, hash_hex) for the new and the legacy format."""
+    if stored_password.startswith('pbkdf2_sha256$'):
+        _, iterations, salt_hex, stored_hash = stored_password.split('$')
+        return int(iterations), bytes.fromhex(salt_hex), stored_hash
+    salt_hex, stored_hash = stored_password.split(':')
+    return PASSWORD_HASH_ITERATIONS_LEGACY, bytes.fromhex(salt_hex), stored_hash
+
+
+def password_hash_needs_upgrade(stored_password: str) -> bool:
+    try:
+        return _parse_password_hash(stored_password)[0] < PASSWORD_HASH_ITERATIONS_CURRENT
+    except Exception:
+        return False
+
 
 def verify_password(stored_password: str, provided_password: str) -> bool:
-    """Verify password against stored hash with backward compatibility"""
+    """Verify password against stored hash (new and legacy format)"""
     try:
-        salt_hex, stored_hash = stored_password.split(':')
-        salt = bytes.fromhex(salt_hex)
-        
-        if len(salt) == 32:
-            provided_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode(), salt, 200000)
-            return secrets.compare_digest(stored_hash, provided_hash.hex())
-        
-        else:
+        iterations, salt, stored_hash = _parse_password_hash(stored_password)
+        if len(salt) != 32:
             return False
-    except:
+        provided_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode(), salt, iterations)
+        return secrets.compare_digest(stored_hash, provided_hash.hex())
+    except Exception:
         return False
 
 def generate_session_token() -> str:
@@ -483,16 +514,18 @@ def _send_email_sync(to_addr: str, subject: str, html_body: str, text_body: str,
     password = cfg.get('smtp_password', '')
     use_tls = cfg.get('smtp_use_tls', True)
 
+    # Verify the server certificate and hostname (create_default_context).
+    tls_context = ssl.create_default_context()
     if use_tls:
         server = smtplib.SMTP(host, port, timeout=10)
         server.ehlo()
-        server.starttls()
+        server.starttls(context=tls_context)
     else:
-        server = smtplib.SMTP_SSL(host, port, timeout=10)
+        server = smtplib.SMTP_SSL(host, port, timeout=10, context=tls_context)
     server.login(user, password)
     server.sendmail(msg['From'], [to_addr], msg.as_string())
     server.quit()
-    print(f"[EMAIL] Email sent successfully to {to_addr}")
+    logger.info("[EMAIL] Email sent to %s", _scrub_email(to_addr))
 
 async def send_password_reset_email(to_addr: str, username: str, reset_token: str):
     """Send a password reset email (fires in background thread)"""
@@ -525,6 +558,62 @@ async def send_password_reset_email(to_addr: str, username: str, reset_token: st
         f"Falls du keinen Reset angefordert hast, ignoriere diese E-Mail."
     )
 
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
+
+
+async def send_login_code_email(to_addr: str, username: str, code: str, client: str, ip: str):
+    """One-time sign-in code (second factor after the password)."""
+    app_url = APP_CONFIG.get('app_url', 'http://localhost:5000').rstrip('/')
+    minutes = LOGIN_EMAIL_CODE_TTL_SECONDS // 60
+    name, client, ip = (html.escape(v or '') for v in (username, client, ip))
+    subject = f"EduGrade – Anmeldecode {code} / Sign-in code"
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem;">
+        <h2 style="margin-bottom: 0.5rem;">Dein Anmeldecode</h2>
+        <p>Hallo {name},</p>
+        <p>jemand meldet sich mit deinem Passwort bei EduGrade an ({client}, IP {ip}). Gib diesen Code dort ein:</p>
+        <p style="font-size:2rem;font-weight:bold;letter-spacing:0.3em;font-family:monospace;">{code}</p>
+        <p style="color:#888;font-size:0.875rem;">Der Code ist {minutes} Minuten gültig. Warst du das nicht? Dann kennt jemand dein Passwort – ändere es bitte sofort.</p>
+        <hr style="border:none;border-top:1px solid #333;margin:1.5rem 0;">
+        <p style="color:#888;font-size:0.75rem;">EduGrade &mdash; <a href="{app_url}">{app_url}</a></p>
+    </div>
+    """
+    text_body = (
+        f"Dein EduGrade-Anmeldecode: {code}\n\n"
+        f"Hallo {username},\n\n"
+        f"jemand meldet sich mit deinem Passwort bei EduGrade an ({client}, IP {ip}).\n"
+        f"Der Code ist {minutes} Minuten gültig.\n"
+        f"Warst du das nicht? Dann kennt jemand dein Passwort – ändere es bitte sofort."
+    )
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
+
+
+async def send_verify_email(to_addr: str, username: str, code: str):
+    """Confirmation code right after registering."""
+    app_url = APP_CONFIG.get('app_url', 'http://localhost:5000').rstrip('/')
+    minutes = REGISTER_VERIFY_TTL_SECONDS // 60
+    name = html.escape(username or '')
+    subject = f"EduGrade – Bestätigungscode {code} / Confirm your email"
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem;">
+        <h2 style="margin-bottom: 0.5rem;">E-Mail-Adresse bestätigen</h2>
+        <p>Hallo {name},</p>
+        <p>willkommen bei EduGrade! Gib diesen Code ein, um deine E-Mail-Adresse zu bestätigen:</p>
+        <p style="font-size:2rem;font-weight:bold;letter-spacing:0.3em;font-family:monospace;">{code}</p>
+        <p style="color:#888;font-size:0.875rem;">Der Code ist {minutes} Minuten gültig. Abgelaufen? Melde dich einfach an, dann bekommst du einen neuen Code. Hast du dich nicht registriert? Dann ignoriere diese E-Mail.</p>
+        <hr style="border:none;border-top:1px solid #333;margin:1.5rem 0;">
+        <p style="color:#888;font-size:0.75rem;">EduGrade &mdash; <a href="{app_url}">{app_url}</a></p>
+    </div>
+    """
+    text_body = (
+        f"Dein EduGrade-Bestätigungscode: {code}\n\n"
+        f"Hallo {username},\n\n"
+        f"willkommen bei EduGrade! Gib diesen Code ein, um deine E-Mail-Adresse zu bestätigen.\n"
+        f"Der Code ist {minutes} Minuten gültig.\n"
+        f"Hast du dich nicht registriert? Dann ignoriere diese E-Mail."
+    )
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
 
@@ -723,6 +812,10 @@ def generate_recovery_key_pdf(username: str, recovery_key: str, language: str = 
         canvas.drawString(MARGIN, 1.7*cm, txt['footer_app'])
         canvas.drawRightString(PAGE_W - MARGIN, 1.7*cm, footer_date)
 
+        # Branding line
+        canvas.drawCentredString(PAGE_W / 2, 1.2*cm, 'Powered by EduGrade · developed by avocloud.net')
+        canvas.linkURL('https://avocloud.net', (PAGE_W / 2 - 4*cm, 1.0*cm, PAGE_W / 2 + 4*cm, 1.5*cm))
+
         canvas.restoreState()
 
     # ── Paragraph styles ───────────────────────────────────────────────────
@@ -874,7 +967,7 @@ async def send_recovery_key_email(to_addr: str, username: str, recovery_key: str
         )
 
     # Generate PDF
-    print(f"[RECOVERY EMAIL] Starting PDF generation for {to_addr}...")
+    logger.info("[RECOVERY EMAIL] Starting PDF generation for %s", _scrub_email(to_addr))
     pdf_bytes = None
     pdf_error = None
     try:
@@ -884,7 +977,7 @@ async def send_recovery_key_email(to_addr: str, username: str, recovery_key: str
         pdf_error = str(e)
         print(f"[RECOVERY EMAIL] PDF generation error: {e}")
 
-    print(f"[RECOVERY EMAIL] Sending email to {to_addr} with PDF={pdf_bytes is not None}...")
+    logger.info("[RECOVERY EMAIL] Sending email to %s with PDF=%s", _scrub_email(to_addr), pdf_bytes is not None)
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(
         None,
@@ -1269,6 +1362,20 @@ async def cleanup_expired_sessions():
 
     return None
 
+CLEANUP_INTERVAL_SECONDS = 60
+
+
+async def _periodic_cleanup():
+    """Run the cleanup continuously, not only at startup: expired session keys
+    and the plaintext cache must not outlive their session in RAM."""
+    while True:
+        await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
+        try:
+            await cleanup_expired_sessions()
+        except Exception:
+            logger.exception("Periodic cleanup failed")
+
+
 # ============ V2 SCHEMA HELPERS ============
 # v2 layout stored in SQLite (db.py):
 #   user_meta row  — version=2, meta_ct = ciphertext of meta dict
@@ -1639,8 +1746,16 @@ def register_user(username: str, email: str, password: str, account_type: str = 
             'user_id': None
         }
 
-    # Check if user already exists
-    if db_layer.get_user_by_email(email) is not None:
+    # Check if user already exists. An address that was never confirmed is
+    # released after UNVERIFIED_ACCOUNT_TTL_HOURS, so nobody can block someone
+    # else's email by registering it first.
+    existing = db_layer.get_user_by_email(email)
+    if existing is not None and _is_stale_unverified(existing):
+        for tok in db_layer.delete_account(email):
+            clear_session_cache(tok)
+        logger.info("Released unconfirmed account %s for re-registration", existing['id'])
+        existing = None
+    if existing is not None:
         return {
             'success': False,
             'message': 'backend.userExists',
@@ -1670,7 +1785,7 @@ def register_user(username: str, email: str, password: str, account_type: str = 
     encryption_salt = secrets.token_bytes(32)
 
     # Derive the data encryption key (DEK) from the password
-    encryption_key = derive_encryption_key(password, encryption_salt)
+    encryption_key = derive_encryption_key(password, encryption_salt, KDF_ITERATIONS_CURRENT)
 
     # Generate a recovery key and store an encrypted copy of the DEK
     recovery_key = generate_recovery_key()
@@ -1684,10 +1799,13 @@ def register_user(username: str, email: str, password: str, account_type: str = 
         "email": email,
         "password_hash": password_hash,
         "encryption_salt": encryption_salt.hex(),
+        "kdf_iterations": KDF_ITERATIONS_CURRENT,
         "recovery_key_hash": hash_recovery_key(recovery_key),
         "recovery_salt": recovery_salt.hex(),
         "encrypted_dek": encrypted_dek,
         "account_type": account_type,
+        # Without mail there's no way to confirm, so self-hosted setups skip it.
+        "email_verified": not smtp_is_configured(),
         "created_at": datetime.now().isoformat()
     })
 
@@ -1717,8 +1835,24 @@ def register_user(username: str, email: str, password: str, account_type: str = 
         'success': True,
         'message': 'backend.registrationSuccess',
         'user_id': user_id,
-        'recovery_key': recovery_key
+        'recovery_key': recovery_key,
+        '_dek': encryption_key,   # internal: popped by the route before responding
     }
+
+
+UNVERIFIED_ACCOUNT_TTL_HOURS = 24
+
+
+def _is_stale_unverified(user: dict) -> bool:
+    """Registered but the email was never confirmed within the grace period.
+    Accounts from before confirmation existed have no flag and count as confirmed."""
+    if user.get('email_verified') is not False:
+        return False
+    try:
+        created = datetime.fromisoformat(user.get('created_at', ''))
+    except (TypeError, ValueError):
+        return True
+    return datetime.now() - created > timedelta(hours=UNVERIFIED_ACCOUNT_TTL_HOURS)
 
 def _list_active_sessions_for_user(user_id: str, include_device: bool = True) -> list[str]:
     """Return all non-expired session tokens belonging to this user.
@@ -1755,12 +1889,18 @@ def _terminate_user_sessions(user_id: str, keep_device: bool = False, only_devic
     return len(tokens)
 
 
-def login_user(email: str, password: str, force: bool = False, long_session: bool = False) -> dict:
+def login_user(email: str, password: str, force: bool = False, long_session: bool = False,
+               email_code: bool = False) -> dict:
     """Log in a user.
 
     `long_session=True` (native app clients) issues a 6-month session instead of
     the default 1-hour web session, so app users don't have to re-authenticate
     constantly. Web sessions stay short-lived.
+
+    The password is never enough on its own: paired accounts confirm with the
+    code on the phone, all others (and paired ones with `email_code=True`,
+    phone not at hand) with a one-time code mailed to the account address.
+    The caller sends that mail.
     """
     email = email.strip().lower()
 
@@ -1820,6 +1960,16 @@ def login_user(email: str, password: str, force: bool = False, long_session: boo
     # Successful auth: atomically reset fail counter + lockout state.
     db_layer.reset_failed_login(email)
 
+    # Raise the stored password hash to the current work factor while we have
+    # the plaintext. (The data key keeps its own count until the next
+    # password set/reset, see user_kdf_iterations.)
+    if password_hash_needs_upgrade(user["password_hash"]):
+        fresh = db_layer.get_user_by_email(email)
+        if fresh:
+            fresh["password_hash"] = hash_password(password)
+            db_layer.put_user(email, fresh)
+            user = fresh
+
     # Single-session enforcement: only one active session per user. If another
     # one already exists, refuse the login unless the caller explicitly opts
     # in to take over (`force=True`), in which case the old sessions are
@@ -1848,26 +1998,39 @@ def login_user(email: str, password: str, force: bool = False, long_session: boo
 
     # Derive encryption key
     encryption_salt = bytes.fromhex(encryption_salt_hex)
-    encryption_key = derive_encryption_key(password, encryption_salt)
+    encryption_key = derive_encryption_key(password, encryption_salt, user_kdf_iterations(user))
 
-    # Accounts with a paired phone need a second factor: the password alone
-    # only opens a short-lived pending login; the session is created once the
-    # one-time code shown on the phone is typed in (see /api/login/verify-code).
+    # The password alone only opens a short-lived pending login; the session is
+    # created once the one-time code (phone or email) is typed in
+    # (see /api/login/verify-code).
     device = user.get('device')
-    if device:
-        pending_id = create_pending_login(user, encryption_key, long_session, force)
+    if not device and not smtp_is_configured():
+        # Self-hosted without mail: no way to deliver a code, so password only
+        # (otherwise nobody could sign in at all).
+        logger.warning("SMTP not configured — login for user %s without second factor", user_id)
+        return finish_login(user, encryption_key, long_session, force)
+    if email_code or not device:
+        pending_id = create_pending_login(user, encryption_key, long_session, force, channel='email')
         return {
             'success': False,
-            'message': 'backend.deviceCodeRequired',
-            'code': 'device_code_required',
+            'message': 'backend.emailCodeRequired',
+            'code': 'email_code_required',
             'pending_id': pending_id,
-            'expires_in': LOGIN_CODE_TTL_SECONDS,
-            'device_name': device.get('name') or '',
+            'expires_in': LOGIN_EMAIL_CODE_TTL_SECONDS,
             'token': None,
             'user': None
         }
-
-    return finish_login(user, encryption_key, long_session, force)
+    pending_id = create_pending_login(user, encryption_key, long_session, force)
+    return {
+        'success': False,
+        'message': 'backend.deviceCodeRequired',
+        'code': 'device_code_required',
+        'pending_id': pending_id,
+        'expires_in': LOGIN_CODE_TTL_SECONDS,
+        'device_name': device.get('name') or '',
+        'token': None,
+        'user': None
+    }
 
 
 def _create_session(user_id: str, encryption_key: bytes, long_session: bool, device: bool = False) -> str:
@@ -1934,6 +2097,14 @@ def finish_login(user: dict, encryption_key: bytes, long_session: bool, force: b
 # the phone displays.
 
 LOGIN_CODE_TTL_SECONDS = 180
+# Backup when the phone isn't at hand: password + code by email. Mail can be
+# slow, so the code lives longer than the phone code.
+LOGIN_EMAIL_CODE_TTL_SECONDS = 600
+LOGIN_EMAIL_RESEND_SECONDS = 60
+LOGIN_EMAIL_MAX_SENDS = 5           # first mail + 4 resends per pending login
+# Confirmation code right after registering: the recovery-key dialog comes
+# first, so it needs more time than a login code.
+REGISTER_VERIFY_TTL_SECONDS = 1800
 LOGIN_CODE_MAX_ATTEMPTS = 5
 MAX_PENDING_LOGINS_PER_USER = 3
 # Passwordless logins (email + phone code) are guessable by anyone who knows
@@ -1974,9 +2145,18 @@ def passwordless_locked(user_id: str) -> bool:
     return len(passwordless_failures[user_id]) >= PASSWORDLESS_MAX_FAILURES
 
 
-def create_pending_login(user: dict, encryption_key: bytes | None, long_session: bool, force: bool) -> str:
+def _pending_ttl(channel: str, purpose: str) -> int:
+    if purpose == 'verify':
+        return REGISTER_VERIFY_TTL_SECONDS
+    return LOGIN_EMAIL_CODE_TTL_SECONDS if channel == 'email' else LOGIN_CODE_TTL_SECONDS
+
+
+def create_pending_login(user: dict, encryption_key: bytes | None, long_session: bool, force: bool,
+                         channel: str = 'device', purpose: str = 'login') -> str:
     """`encryption_key=None` = passwordless: the data key is supplied later by
-    the paired phone (attach step), and the code is only revealed once it is."""
+    the paired phone (attach step), and the code is only revealed once it is.
+    `channel='email'`: the code goes out by email and the phone never sees it.
+    `purpose='verify'`: email confirmation after registering (different mail)."""
     _purge_pending_logins()
     mine = sorted((e['created_ts'], p) for p, e in pending_logins.items() if e['user_id'] == user['id'])
     for _, pid in mine[:max(0, len(mine) - MAX_PENDING_LOGINS_PER_USER + 1)]:
@@ -1991,12 +2171,16 @@ def create_pending_login(user: dict, encryption_key: bytes | None, long_session:
         'force': force,
         'code': f"{secrets.randbelow(10 ** 6):06d}",
         'created_ts': now_ts,
-        'expires_ts': now_ts + LOGIN_CODE_TTL_SECONDS,
+        'expires_ts': now_ts + _pending_ttl(channel, purpose),
         'attempts': 0,
         'ip': get_client_ip(),
         'user_agent': _describe_user_agent(request.headers.get('User-Agent', '')),
         'denied': False,
         'passwordless': encryption_key is None,
+        'channel': channel,
+        'purpose': purpose,
+        'sends': 0,
+        'sent_ts': 0,
     }
     return pending_id
 
@@ -2093,7 +2277,9 @@ def get_user_from_token(token: str) -> dict | None:
             'id': user_info['id'],
             'username': user_info['username'],
             'email': user_info['email'],
-            'account_type': user_info.get('account_type', 'teacher')
+            'account_type': user_info.get('account_type', 'teacher'),
+            'school': user_info.get('school', ''),
+            'dpa_version': user_info.get('dpa_version'),
         }
     return None
 
@@ -2121,6 +2307,11 @@ def login_required(f):
 
         if not user:
             return jsonify({'error': 'Authentication required'}), 401
+
+        # The whole API stays locked until the DPA is signed (see /avv/sign),
+        # except the few calls the signing step and the login itself need.
+        if needs_dpa_signature(user) and not _dpa_exempt(request.path, request.method):
+            return jsonify({'success': False, 'message': 'backend.dpaRequired', 'dpa_required': True}), 403
 
         # Add user to request context
         request.user = user # type: ignore
@@ -2173,6 +2364,45 @@ def load_version():
         return '1.0.0', ''
 
 APP_VERSION, BUILD_DATE = load_version()
+
+# Version of the data processing agreement (/avv). Every account has to sign
+# it once (/avv/sign) before using the app; bumping the version makes
+# everyone sign again, so only do that when the text changes materially.
+DPA_VERSION = '1.0'
+DPA_SIGNER_NAME_MAX = 100
+
+
+# API paths usable without a signed DPA: the signing call itself, deleting the
+# account (a way out for someone who does not agree), session housekeeping,
+# the announcement banner, the school list the signing form pre-fills from and
+# the phone-code login flow (the paired phone has to hand out the code before
+# the account can even reach the signing page).
+_DPA_EXEMPT_PATHS = (
+    '/api/dpa/accept', '/api/heartbeat', '/api/disconnect',
+    '/api/announcement', '/api/schools', '/api/profile/school',
+    '/api/device/status', '/api/device/login-requests',
+)
+DPA_MIN_READ_SECONDS = 60
+
+
+def _dpa_text_hash() -> str:
+    """SHA-256 over the German and English contract templates as shipped, so a
+    signature can be tied to the exact text that was shown."""
+    h = hashlib.sha256()
+    for name in ('_dpa_content.html', '_dpa_content_en.html'):
+        h.update((Path(__file__).parent / 'templates' / name).read_bytes())
+    return h.hexdigest()
+
+
+def _dpa_exempt(path: str, method: str) -> bool:
+    if path == '/api/account' and method == 'DELETE':
+        return True
+    return path.startswith(_DPA_EXEMPT_PATHS)
+
+
+def needs_dpa_signature(user: dict) -> bool:
+    """True if *user* (from get_user_from_token) hasn't signed the current DPA."""
+    return user.get('dpa_version') != DPA_VERSION
 VERSION_STRING = f"v{APP_VERSION} ({BUILD_DATE})" if BUILD_DATE else f"v{APP_VERSION}"
 
 app = Quart(__name__,
@@ -2209,7 +2439,15 @@ async def startup():
     migrate_plaintext_shares()
     purge_stored_recovery_key_copies()
     await cleanup_expired_sessions()
+    app.add_background_task(_periodic_cleanup)
     print("Database initialized successfully")
+    # Operator console (stats, announcements, …) on the server's stdin — type
+    # `help` in the hosting panel. See manage.py.
+    try:
+        import manage
+        manage.start_in_server()
+    except Exception as e:
+        logger.warning("Server console not started: %s", e)
 
 # CSRF defence: require X-Requested-With on cookie-authenticated state-changing
 # requests. Browsers will not let cross-origin <form> submissions or top-level
@@ -2281,14 +2519,13 @@ async def set_cache_control_headers(response):
     # <base> hijacking, framing and cross-origin form posts.
     response.headers.setdefault('Content-Security-Policy', (
         "default-src 'self'; "
-        # jsdelivr: tailwind + basecoat-css (both SRI-pinned in the templates).
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        # All scripts, styles and fonts are self-hosted under /static/vendor.
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
-        "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+        "font-src 'self' data:; "
         "connect-src 'self'; "
-        # Ko-fi donation widget in the support dialog.
-        "frame-src https://ko-fi.com; "
+        "frame-src 'none'; "
         "object-src 'none'; "
         "base-uri 'none'; "
         "frame-ancestors 'none'; "
@@ -2308,6 +2545,14 @@ async def set_cache_control_headers(response):
 
 # ============ Page Routes ============
 
+def _moved_param() -> dict:
+    """Carry only ?moved= (domain-move.js welcome on edugrade.at) across the
+    / <-> /login redirects. Never pass request.args wholesale to url_for: keys
+    like endpoint/_external/_scheme are url_for's own arguments."""
+    moved = request.args.get('moved')
+    return {'moved': moved} if moved in ('de', 'en') else {}
+
+
 @app.route('/')
 async def index():
     """Main page - requires login"""
@@ -2315,7 +2560,10 @@ async def index():
     user = get_user_from_token(token)
 
     if not user:
-        return redirect(url_for('login_page'))
+        return redirect(url_for('login_page', **_moved_param()))
+
+    if needs_dpa_signature(user):
+        return redirect(url_for('dpa_sign_page'))
 
     return await render_template('index.html', user=user, app_version=APP_VERSION, version_string=VERSION_STRING, build_date=BUILD_DATE)
 
@@ -2331,7 +2579,7 @@ async def login_page():
     # token may still verify but the key is gone — without this guard the
     # user gets stuck in /login → / → 401 → /login redirect loop.
     if user and get_encryption_key_for_session(token):
-        return redirect(url_for('index'))
+        return redirect(url_for('index', **_moved_param()))
 
     return await render_template('login.html', app_version=APP_VERSION)
 
@@ -2343,6 +2591,75 @@ async def terms():
 @app.route('/privacy')
 async def privacy():
     return await render_template('privacy.html', app_version=APP_VERSION)
+
+@app.route('/avv')
+@app.route('/dpa')
+async def dpa():
+    return await render_template('dpa.html', app_version=APP_VERSION, dpa_version=DPA_VERSION)
+
+
+@app.route('/avv/sign')
+async def dpa_sign_page():
+    """Mandatory signing step for accounts without the current DPA."""
+    user = get_user_from_token(get_token_from_request())
+    if not user:
+        return redirect(url_for('login_page', **_moved_param()))
+    if not needs_dpa_signature(user):
+        return redirect(url_for('index'))
+    stored = db_layer.get_user_by_email(user['email'])
+    if stored and stored.get('dpa_shown_version') != DPA_VERSION:
+        stored['dpa_shown_version'] = DPA_VERSION
+        stored['dpa_shown_at'] = datetime.now(timezone.utc).isoformat()
+        db_layer.put_user(stored['email'], stored)
+    return await render_template('dpa_sign.html', app_version=APP_VERSION, dpa_version=DPA_VERSION,
+                                 user=user, resign=bool(user.get('dpa_version')))
+
+
+@app.route('/api/dpa/accept', methods=['POST'])
+@login_required
+async def api_dpa_accept():
+    """Record the electronic signature of the DPA (Art. 28(9) GDPR)."""
+    data = await request.get_json() or {}
+    name = ' '.join(str(data.get('name') or '').split())[:DPA_SIGNER_NAME_MAX]
+    school = _normalize_school(data.get('school'))
+    if len(name) < 3 or data.get('accepted') is not True or data.get('version') != DPA_VERSION:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    if not user:
+        return jsonify({'success': False}), 404
+
+    # The minimum reading time is enforced here too, not only by the button:
+    # the contract has to have been served at least a minute ago.
+    now = datetime.now(timezone.utc)
+    shown_at = None
+    if user.get('dpa_shown_version') == DPA_VERSION and user.get('dpa_shown_at'):
+        try:
+            shown_at = datetime.fromisoformat(user['dpa_shown_at'])
+            if shown_at.tzinfo is None:
+                shown_at = shown_at.replace(tzinfo=timezone.utc)
+        except ValueError:
+            shown_at = None
+    if shown_at is None or (now - shown_at).total_seconds() < DPA_MIN_READ_SECONDS:
+        return jsonify({'success': False, 'message': 'backend.dpaTooFast'}), 400
+
+    # Keep earlier signatures instead of overwriting them.
+    if user.get('dpa_version'):
+        user.setdefault('dpa_history', []).append({
+            'version': user.get('dpa_version'),
+            'accepted_at': user.get('dpa_accepted_at'),
+            'signer_name': user.get('dpa_signer_name'),
+            'signer_school': user.get('dpa_signer_school'),
+            'text_sha256': user.get('dpa_text_sha256'),
+        })
+    user['dpa_version'] = DPA_VERSION
+    user['dpa_accepted_at'] = now.isoformat()  # UTC, offset included
+    user['dpa_text_sha256'] = _dpa_text_hash()
+    user['dpa_signer_name'] = name
+    user['dpa_signer_school'] = school
+    db_layer.put_user(user['email'], user)
+    logger.info("DPA %s signed by user %s", DPA_VERSION, user['id'])
+    return jsonify({'success': True})
 
 @app.route('/docs')
 @app.route('/docs/')
@@ -2472,10 +2789,7 @@ async def api_register():
     if password != password_confirm:
         return jsonify({'success': False, 'message': 'backend.passwordsMismatch'}), 400
 
-    result = register_user(username, email, password)
-    status_code = 200 if result['success'] else 400
-
-    return jsonify(result), status_code
+    return await _registration_response(register_user(username, email, password))
 
 
 @app.route('/api/register-org', methods=['POST'])
@@ -2499,10 +2813,29 @@ async def api_register_org():
     if password != password_confirm:
         return jsonify({'success': False, 'message': 'backend.passwordsMismatch'}), 400
 
-    result = register_org_admin(org_name, username, email, password)
-    status_code = 200 if result['success'] else 400
+    return await _registration_response(register_org_admin(org_name, username, email, password))
 
-    return jsonify(result), status_code
+
+async def _registration_response(result: dict):
+    """Answer a registration. With mail configured the new account starts
+    unconfirmed: a code goes to the address, and typing it in (same step as
+    the email login code) confirms the address and signs the account in."""
+    dek = result.pop('_dek', None)
+    if not result['success']:
+        return jsonify(result), 400
+    user = db_layer.get_user_by_id(result['user_id'])
+    if user and user.get('email_verified') is False:
+        pending_id = create_pending_login(user, dek, False, False, channel='email', purpose='verify')
+        if await _send_pending_email_code(pending_id):
+            result['verify'] = {
+                'pending_id': pending_id,
+                'expires_in': REGISTER_VERIFY_TTL_SECONDS,
+                'resend_in': LOGIN_EMAIL_RESEND_SECONDS,
+            }
+        else:
+            # Account stays unconfirmed; the first sign-in mails a new code.
+            pending_logins.pop(pending_id, None)
+    return jsonify(result), 200
 
 
 @app.route('/api/login', methods=['POST'])
@@ -2519,11 +2852,15 @@ async def api_login():
     force = bool(data.get('force', False))
     # Native app clients identify themselves to get a long-lived session.
     long_session = str(data.get('client', '')).lower() in ('app', 'android', 'mobile')
+    # Paired account, phone not at hand: second factor by email instead.
+    email_code = data.get('second_factor') == 'email'
 
     if not email or not password:
         return jsonify({'success': False, 'message': 'backend.fillAllFields'}), 400
+    if email_code and not smtp_is_configured():
+        return jsonify({'success': False, 'message': 'backend.smtpNotConfigured'}), 400
 
-    result = login_user(email, password, force=force, long_session=long_session)
+    result = login_user(email, password, force=force, long_session=long_session, email_code=email_code)
 
     if result.get('code') == 'session_exists':
         # 409 Conflict: client must confirm before we kill the other session.
@@ -2533,10 +2870,62 @@ async def api_login():
         # Password was right; the paired phone now shows the one-time code.
         return jsonify(result), 202
 
+    if result.get('code') == 'email_code_required':
+        if not await _send_pending_email_code(result['pending_id']):
+            pending_logins.pop(result['pending_id'], None)
+            return jsonify({'success': False, 'message': 'backend.emailCodeSendFailed'}), 502
+        result['resend_in'] = LOGIN_EMAIL_RESEND_SECONDS
+        return jsonify(result), 202
+
     if result['success']:
         return await _login_response(result, long_session)
 
     return jsonify(result), 401
+
+
+async def _send_pending_email_code(pending_id: str) -> bool:
+    """Mail the pending login's code to the account address. False if sending failed."""
+    pending = pending_logins[pending_id]
+    user = db_layer.get_user_by_email(pending['email']) or {}
+    try:
+        if pending.get('purpose') == 'verify':
+            await send_verify_email(pending['email'], user.get('username', ''), pending['code'])
+        else:
+            await send_login_code_email(pending['email'], user.get('username', ''), pending['code'],
+                                        pending['user_agent'], pending['ip'])
+    except Exception as e:
+        logger.warning("Failed to send login code to %s: %s", _scrub_email(pending['email']), e)
+        return False
+    pending['sends'] += 1
+    pending['sent_ts'] = time.time()
+    logger.info("Login code sent by email for user %s", pending['user_id'])
+    return True
+
+
+@app.route('/api/login/resend-code', methods=['POST'])
+@rate_limit('login_code')
+async def api_login_resend_code():
+    """Send a fresh email code for a pending login (at most once a minute).
+    The old code stops working; wrong attempts keep counting."""
+    data = await request.get_json() or {}
+    pending_id = str(data.get('pending_id', ''))
+    _purge_pending_logins()
+    pending = pending_logins.get(pending_id)
+    if not pending or pending.get('channel') != 'email':
+        return jsonify({'success': False, 'message': 'backend.loginCodeExpired', 'code': 'expired'}), 410
+    wait = int(pending['sent_ts'] + LOGIN_EMAIL_RESEND_SECONDS - time.time())
+    if wait > 0:
+        return jsonify({'success': False, 'message': 'backend.emailCodeResendWait',
+                        'message_params': {'seconds': wait}, 'resend_in': wait}), 429
+    if pending['sends'] >= LOGIN_EMAIL_MAX_SENDS:
+        return jsonify({'success': False, 'message': 'backend.emailCodeResendLimit'}), 429
+    ttl = _pending_ttl(pending['channel'], pending.get('purpose', 'login'))
+    pending['code'] = f"{secrets.randbelow(10 ** 6):06d}"
+    pending['expires_ts'] = time.time() + ttl
+    if not await _send_pending_email_code(pending_id):
+        return jsonify({'success': False, 'message': 'backend.emailCodeSendFailed'}), 502
+    return jsonify({'success': True, 'message': 'backend.emailCodeResent',
+                    'expires_in': ttl, 'resend_in': LOGIN_EMAIL_RESEND_SECONDS})
 
 
 async def _login_response(result: dict, long_session: bool):
@@ -2621,6 +3010,11 @@ async def api_login_verify_code():
     user = db_layer.get_user_by_email(pending['email'])
     if not user or user['id'] != pending['user_id']:
         return jsonify({'success': False, 'message': 'backend.loginCodeExpired', 'code': 'expired'}), 410
+    if pending['channel'] == 'email' and user.get('email_verified') is False:
+        # The code came through the mailbox — that's the confirmation.
+        user['email_verified'] = True
+        db_layer.put_user(user['email'], user)
+        logger.info("Email confirmed for user %s", user['id'])
     result = finish_login(user, pending['dek'], pending['long_session'], pending['force'])
     return await _login_response(result, pending['long_session'])
 
@@ -2772,7 +3166,7 @@ async def api_device_login_requests():
         'ip': e['ip'],
         'client': e['user_agent'],
     } for pid, e in sorted(pending_logins.items(), key=lambda kv: kv[1]['created_ts'])
-        if e['user_id'] == user['id'] and not e['denied']]
+        if e['user_id'] == user['id'] and not e['denied'] and e.get('channel') != 'email']
     return jsonify({'success': True, 'requests': items})
 
 
@@ -2807,6 +3201,147 @@ async def api_device_deny_login(pending_id):
         pending['denied'] = True
         logger.info("Browser login denied from paired phone for user %s", user['id'])
     return jsonify({'success': True})
+
+
+# ============ ANNOUNCEMENTS ============
+# Developer announcements, shown as dialogs after login (web) or when the app
+# is opened — several are shown one after another, oldest first. Created in the server
+# console (`python manage.py` → announce); it writes data/announcement.json, which is re-read
+# whenever the file changes (no restart). A user sees each announcement until
+# they press "OK" on it, on any device. Clients that don't know announcements
+# (old app versions) never confirm, so the new version still shows them.
+
+ANNOUNCEMENT_PATH = DATA_DIR / "announcement.json"
+ANNOUNCEMENT_LEVELS = ('info', 'alert', 'danger')
+ANNOUNCEMENT_SEEN_MAX = 200   # remembered confirmations per user
+_announcement_cache = {'mtime': None, 'data': []}
+
+
+def _announcement_live(ann) -> bool:
+    if not isinstance(ann, dict) or not ann.get('active') or not ann.get('id') or not ann.get('message'):
+        return False
+    if ann.get('level') not in ANNOUNCEMENT_LEVELS:
+        return False
+    if ann.get('until'):
+        try:
+            return datetime.now() <= datetime.fromisoformat(ann['until'])
+        except ValueError:
+            return False
+    return True
+
+
+def current_announcements() -> list:
+    """All live announcements, oldest first (missing/invalid file → none)."""
+    try:
+        mtime = ANNOUNCEMENT_PATH.stat().st_mtime
+    except FileNotFoundError:
+        return []
+    if _announcement_cache['mtime'] != mtime:
+        try:
+            with open(ANNOUNCEMENT_PATH, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            _announcement_cache['data'] = raw.get('announcements', []) if isinstance(raw, dict) else []
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning("announcement.json unreadable: %s", e)
+            _announcement_cache['data'] = []
+        _announcement_cache['mtime'] = mtime
+    return [a for a in _announcement_cache['data'] if _announcement_live(a)]
+
+
+@app.route('/api/announcement', methods=['GET'])
+@login_required
+async def api_announcement():
+    """Live announcements this user hasn't confirmed yet, oldest first."""
+    user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    seen = set((user or {}).get('announcements_seen') or [])
+    return jsonify({'success': True, 'announcements': [{
+        'id': a['id'],
+        'level': a['level'],
+        'title': a.get('title') or '',
+        'message': a['message'],
+        'title_en': a.get('title_en') or '',
+        'message_en': a.get('message_en') or '',
+    } for a in current_announcements() if a['id'] not in seen]})
+
+
+@app.route('/api/announcement/ack', methods=['POST'])
+@login_required
+async def api_announcement_ack():
+    """"OK" pressed on one announcement: don't show it to this user again (any device)."""
+    data = await request.get_json() or {}
+    ann_id = str(data.get('id', ''))[:100]
+    user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    if not ann_id or not user:
+        return jsonify({'success': True})
+    seen = user.get('announcements_seen') or []
+    if ann_id not in seen:
+        user['announcements_seen'] = (seen + [ann_id])[-ANNOUNCEMENT_SEEN_MAX:]
+        db_layer.put_user(user['email'], user)
+    return jsonify({'success': True})
+
+
+SCHOOL_NAME_MAX = 120
+SCHOOL_SUGGESTIONS_MAX = 8
+
+
+def _normalize_school(name) -> str:
+    return ' '.join(str(name or '').split())[:SCHOOL_NAME_MAX]
+
+
+def _school_matches(name: str, query: str) -> int | None:
+    """Rank of *name* for the typed *query* (lower = better), None if no match.
+
+    Every typed word has to start a word of the school name, so "htl tr"
+    finds "HTL Traun"; a plain substring match ranks last.
+    """
+    n, q = name.casefold(), query.casefold()
+    if n.startswith(q):
+        return 0
+    words = n.split()
+    if all(any(w.startswith(t) for w in words) for t in q.split()):
+        return 1
+    return 2 if q in n else None
+
+
+@app.route('/api/schools', methods=['GET'])
+@login_required
+async def api_schools():
+    """Schools other teachers already entered, matching what the user is typing."""
+    query = _normalize_school(request.args.get('q', ''))
+    if len(query) < 2:
+        return jsonify({'success': True, 'schools': []})
+    hits = []
+    for name, count in db_layer.list_schools():
+        rank = _school_matches(name, query)
+        if rank is not None:
+            hits.append((rank, -count, name.casefold(), name))
+    hits.sort()
+    return jsonify({'success': True, 'schools': [h[3] for h in hits[:SCHOOL_SUGGESTIONS_MAX]]})
+
+
+@app.route('/api/profile/school', methods=['POST'])
+@login_required
+async def api_profile_school():
+    """Set the (mandatory) school of the account.
+
+    Stored in plain text on the account — unlike appData — so colleagues
+    get it suggested. Adopts the existing spelling when the school is
+    already known (case-insensitive), so "htl traun" joins "HTL Traun".
+    """
+    data = await request.get_json() or {}
+    school = _normalize_school(data.get('school'))
+    if not school:
+        return jsonify({'success': False, 'message': 'profile.schoolRequired'}), 400
+    for name, _count in db_layer.list_schools():
+        if name.casefold() == school.casefold():
+            school = name
+            break
+    user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    if not user:
+        return jsonify({'success': False}), 404
+    user['school'] = school
+    db_layer.put_user(user['email'], user)
+    return jsonify({'success': True, 'school': school})
 
 
 @app.route('/api/logout', methods=['POST'])
@@ -2867,7 +3402,7 @@ async def api_password_reset():
 
         # Derive a new DEK from the new password
         new_encryption_salt = secrets.token_bytes(32)
-        new_dek = derive_encryption_key(new_password, new_encryption_salt)
+        new_dek = derive_encryption_key(new_password, new_encryption_salt, KDF_ITERATIONS_CURRENT)
 
         # Re-encrypt the user data with the new DEK (stored as legacy v1 blob;
         # next login will migrate it to v2)
@@ -2882,6 +3417,7 @@ async def api_password_reset():
         # Update user record
         user['password_hash'] = hash_password(new_password)
         user['encryption_salt'] = new_encryption_salt.hex()
+        user['kdf_iterations'] = KDF_ITERATIONS_CURRENT
         user['recovery_salt'] = new_recovery_salt.hex()
         user['encrypted_dek'] = new_encrypted_dek
         # The phone's wrapped copy is of the old DEK — the pairing can't survive.
@@ -3052,7 +3588,7 @@ async def api_password_reset_confirm_token():
 
         # Generate new password hash and encryption key (data will be fresh/empty)
         new_encryption_salt = secrets.token_bytes(32)
-        new_dek = derive_encryption_key(new_password, new_encryption_salt)
+        new_dek = derive_encryption_key(new_password, new_encryption_salt, KDF_ITERATIONS_CURRENT)
 
         # Reset user data to empty initial state
         initial_data = {
@@ -3083,6 +3619,7 @@ async def api_password_reset_confirm_token():
 
         user['password_hash'] = hash_password(new_password)
         user['encryption_salt'] = new_encryption_salt.hex()
+        user['kdf_iterations'] = KDF_ITERATIONS_CURRENT
         user['recovery_key_hash'] = hash_recovery_key(new_recovery_key)
         user['recovery_salt'] = new_recovery_salt.hex()
         user['encrypted_dek'] = new_encrypted_dek
@@ -3158,11 +3695,16 @@ async def api_delete_account():
     user_email = request.user['email'] # type: ignore
 
     try:
-        db_layer.delete_user_data(user_id)
-        # Purge every session for this user from DB and in-memory caches so no
-        # other active session retains stale encryption keys or data.
+        # One transaction: gradebook, sessions, org membership/roster, shares,
+        # handovers, reset tokens and the user record.
+        try:
+            tokens = db_layer.delete_account(user_email)
+        except ValueError:
+            return jsonify({'success': False, 'message': 'backend.orgAdminCannotLeave'}), 400
+        for tok in tokens:
+            clear_session_cache(tok)
+        # Sessions of this user that are not in the DB anymore but still hold keys
         _terminate_user_sessions(user_id)
-        db_layer.delete_user(user_email)
 
         response = await make_response(jsonify({'success': True, 'message': 'backend.accountDeleted'}))
         response.delete_cookie('session_token')
@@ -4044,8 +4586,7 @@ async def api_accept_handover(handover_token):
 
     expires_at = handover.get('expires_at')
     if expires_at and datetime.fromisoformat(expires_at) < datetime.now():
-        handover['status'] = 'expired'
-        db_layer.put_handover(handover_token, handover)
+        db_layer.delete_handover(handover_token)
         return jsonify({'success': False, 'message': 'backend.handoverExpired'}), 400
 
     snapshot = decrypt_share_data(handover.get('encrypted_data', ''), MASTER_SHARE_KEY)
@@ -4081,8 +4622,8 @@ async def api_accept_handover(handover_token):
     if org_id:
         db_layer.delete_roster_for_class(org_id, from_user_id, class_id)
 
-    handover['status'] = 'accepted'
-    db_layer.put_handover(handover_token, handover)
+    # The snapshot has been imported; keep nothing of it on the server.
+    db_layer.delete_handover(handover_token)
 
     sync_org_roster_for_class(user_id, new_class_id, new_class, meta.get('teacherName', ''))
 
@@ -4102,8 +4643,7 @@ async def api_decline_handover(handover_token):
     if handover.get('status') != 'pending':
         return jsonify({'success': False, 'message': 'backend.handoverNotPending'}), 400
 
-    handover['status'] = 'declined'
-    db_layer.put_handover(handover_token, handover)
+    db_layer.delete_handover(handover_token)
     return jsonify({'success': True, 'message': 'backend.handoverDeclined'})
 
 

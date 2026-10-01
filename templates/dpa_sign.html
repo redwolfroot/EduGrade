@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="de" data-title-de="AVV unterzeichnen - EduGrade" data-title-en="Sign the DPA - EduGrade">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Referrer-Policy" content="strict-origin-when-cross-origin">
+    <title>AVV unterzeichnen - EduGrade</title>
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v={{ app_version }}">
+    <link rel="manifest" href="/static/manifest.json?v={{ app_version }}">
+    <meta name="theme-color" content="#0B0B0B">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="EduGrade">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v={{ app_version }}">
+    <script src="/static/scripts/resource-guard.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/domain-move.js?v={{ app_version }}"></script>
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <link rel="stylesheet" href="/static/vendor/basecoat.min.css">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
+    <link rel="stylesheet" href="/static/css/avocloud-branding.css?v={{ app_version }}">
+    <script src="/static/scripts/legal-lang.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/theme.js?v={{ app_version }}"></script>
+    <style>
+        html,
+        body {
+            overflow: visible !important;
+            overflow-y: scroll !important;
+            height: auto !important;
+            min-height: 100% !important;
+            overscroll-behavior: auto !important;
+        }
+
+        #app {
+            overflow: visible !important;
+        }
+
+        .hero-gradient {
+            background: linear-gradient(135deg, oklch(.3 .1 250) 0%, oklch(.2 .05 280) 100%);
+        }
+
+        .section-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 0.5rem;
+            background: oklch(.3 .1 250);
+            color: white;
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+        .avv-body p, .avv-body li { color: oklch(.708 0 0); }
+        .avv-body ol { list-style: decimal; padding-left: 1.25rem; }
+        .avv-body ul { list-style: disc; padding-left: 1.25rem; }
+        .avv-body li { margin-top: 0.35rem; }
+        .avv-body table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .avv-body th, .avv-body td { text-align: left; padding: 0.5rem; border-bottom: 1px solid oklch(.4 0 0 / .4); vertical-align: top; }
+        .avv-body th { color: inherit; font-weight: 600; }
+        .dpa-steps { list-style: decimal; padding-left: 1.25rem; display: grid; gap: 0.6rem; }
+        .dpa-steps li { color: var(--muted-foreground); }
+        .dpa-steps strong { color: var(--foreground); }
+    </style>
+</head>
+
+<body>
+    <div id="app" class="mx-auto px-4 sm:px-10 lg:px-16 py-6" style="max-width: 60rem;">
+        <header class="flex items-center justify-between gap-2 mb-8">
+            <p class="font-semibold" style="font-family: 'Syne', sans-serif; font-size: 1.1rem;">EduGrade</p>
+            <div class="flex items-center gap-2">
+                <div class="legal-lang-switch" role="group" aria-label="Language"><button type="button" data-set-lang="de">DE</button><button type="button" data-set-lang="en">EN</button></div>
+                <button type="button" id="dpa-logout" class="btn-outline"><span data-lang-inline="de">Abmelden</span><span data-lang-inline="en">Sign out</span></button>
+            </div>
+        </header>
+
+        <section class="card hero-gradient text-white mb-8">
+            <div class="p-6 sm:p-8 text-center">
+                {% if resign %}
+                <h2 class="text-2xl sm:text-4xl font-bold mb-4" style="hyphens: auto; overflow-wrap: anywhere;"><span data-lang-inline="de">Der AVV wurde aktualisiert</span><span data-lang-inline="en">The DPA has been updated</span></h2>
+                <p class="text-lg opacity-90"><span data-lang-inline="de">Bitte unterzeichne die neue Fassung, um EduGrade weiter zu nutzen.</span><span data-lang-inline="en">Please sign the new version to keep using EduGrade.</span></p>
+                {% else %}
+                <h2 class="text-2xl sm:text-4xl font-bold mb-4" style="hyphens: manual; overflow-wrap: anywhere;"><span data-lang-inline="de">Auftrags&shy;verarbeitungs&shy;vertrag unterzeichnen</span><span data-lang-inline="en">Sign the Data Processing Agreement</span></h2>
+                <p class="text-lg opacity-90"><span data-lang-inline="de">Ein letzter Schritt, bevor du EduGrade nutzen kannst.</span><span data-lang-inline="en">One last step before you can use EduGrade.</span></p>
+                {% endif %}
+                <p class="text-sm opacity-70 mt-2">Version {{ dpa_version }}</p>
+            </div>
+        </section>
+
+        <section class="card mb-6">
+            <header class="mb-4">
+                <h3 class="text-xl font-semibold"><span data-lang-inline="de">Warum ist das nötig?</span><span data-lang-inline="en">Why is this needed?</span></h3>
+            </header>
+            <section class="avv-body space-y-3">
+                <div data-lang-block="de">
+                    <p>In EduGrade speicherst du Daten deiner Schülerinnen und Schüler. Die DSGVO (Art.&nbsp;28) schreibt dafür einen Vertrag zwischen dir bzw. deiner Schule und avocloud.net als Betreiber vor. Das Wichtigste in Kürze:</p>
+                    <ul>
+                        <li>Deine Daten werden ausschließlich für dich gespeichert und nicht weitergegeben oder ausgewertet.</li>
+                        <li>Die Daten sind verschlüsselt und liegen auf Servern in Deutschland (EU).</li>
+                        <li>Du kannst deine Daten jederzeit exportieren oder dein Konto samt allen Daten löschen.</li>
+                        <li>Nutzt du EduGrade für deine Schule, stimme die Nutzung bitte mit deiner Schulleitung ab.</li>
+                    </ul>
+                </div>
+                <div data-lang-block="en">
+                    <p>In EduGrade you store data about your students. The GDPR (Art.&nbsp;28) requires an agreement for this between you or your school and avocloud.net as operator. The key points:</p>
+                    <ul>
+                        <li>Your data is stored only for you and is not shared or analysed.</li>
+                        <li>The data is encrypted and stored on servers in Germany (EU).</li>
+                        <li>You can export your data or delete your account with all data at any time.</li>
+                        <li>If you use EduGrade for your school, please agree its use with your school management.</li>
+                    </ul>
+                </div>
+            </section>
+        </section>
+
+        <h3 class="text-2xl font-bold mt-10 mb-4"><span data-lang-inline="de">Vertragstext</span><span data-lang-inline="en">Agreement</span></h3>
+        <div data-lang-block="de">
+{% include '_dpa_content.html' %}
+        </div>
+        <div data-lang-block="en">
+{% include '_dpa_content_en.html' %}
+        </div>
+
+        <section id="dpa-sign-card" class="card mb-6 border-2 border-blue-500/30">
+            <header class="mb-4">
+                <h3 class="text-xl font-semibold"><span data-lang-inline="de">Unterzeichnen</span><span data-lang-inline="en">Sign</span></h3>
+            </header>
+            <section>
+                <form id="dpa-sign-form" class="form grid gap-4">
+                    <div class="grid gap-2">
+                        <label for="dpa-name"><span data-lang-inline="de">Vor- und Nachname</span><span data-lang-inline="en">First and last name</span></label>
+                        <input type="text" id="dpa-name" name="name" class="input w-full" required minlength="3" maxlength="100" autocomplete="name">
+                    </div>
+                    <div class="grid gap-2">
+                        <label for="dpa-school"><span data-lang-inline="de">Schule</span><span data-lang-inline="en">School</span> <span class="text-sm" style="color: var(--muted-foreground);"><span data-lang-inline="de">(falls du EduGrade für eine Schule nutzt)</span><span data-lang-inline="en">(if you use EduGrade for a school)</span></span></label>
+                        <input type="text" id="dpa-school" name="school" class="input w-full" maxlength="120" value="{{ user.school or '' }}">
+                    </div>
+                    <label class="flex items-start gap-2">
+                        <input type="checkbox" id="dpa-accept" class="mt-1" required>
+                        <span class="text-sm"><span data-lang-inline="de">Ich habe den Auftragsverarbeitungsvertrag (Version {{ dpa_version }}) gelesen und schließe ihn verbindlich ab &ndash; soweit ich für eine Schule handle, in deren Namen und mit deren Einverständnis.</span><span data-lang-inline="en">I have read the Data Processing Agreement (version {{ dpa_version }}) and conclude it bindingly &ndash; where I act for a school, on its behalf and with its consent. The German version is legally binding.</span></span>
+                    </label>
+                    <p id="dpa-error" class="text-sm text-red-500 hidden"><span data-lang-inline="de">Unterzeichnen fehlgeschlagen. Bitte versuche es erneut.</span><span data-lang-inline="en">Signing failed. Please try again.</span></p>
+                    <button type="submit" id="dpa-submit" class="btn-primary is-cta w-full" disabled><span data-lang-inline="de">Verbindlich unterzeichnen</span><span data-lang-inline="en">Sign bindingly</span></button>
+                    <p id="dpa-wait" class="text-sm text-center" style="color: var(--muted-foreground);" aria-live="polite"></p>
+                    <p class="text-xs" style="color: var(--muted-foreground);"><span data-lang-inline="de">Gespeichert werden Name, Schule, Zeitpunkt und Vertragsversion. Die jeweils gültige Fassung kannst du jederzeit unter <a href="/avv" target="_blank" class="text-blue-400 hover:underline">/avv</a> nachlesen.</span><span data-lang-inline="en">We store your name, school, time and contract version. You can read the current version at any time at <a href="/avv" target="_blank" class="text-blue-400 hover:underline">/avv</a>.</span></p>
+                </form>
+            </section>
+        </section>
+
+        <dialog id="dpa-intro-dialog" class="dialog w-full sm:max-w-[480px]" aria-labelledby="dpa-intro-title">
+            <div>
+                <header>
+                    <h2 id="dpa-intro-title">{% if resign %}<span data-lang-inline="de">Neue Fassung des AVV</span><span data-lang-inline="en">New version of the DPA</span>{% else %}<span data-lang-inline="de">Bevor es losgeht</span><span data-lang-inline="en">Before you start</span>{% endif %}</h2>
+                    <p>{% if resign %}<span data-lang-inline="de">Der Auftragsverarbeitungsvertrag wurde geändert. Bitte unterzeichne die neue Fassung, um EduGrade weiter zu nutzen.</span><span data-lang-inline="en">The Data Processing Agreement has changed. Please sign the new version to keep using EduGrade.</span>{% else %}<span data-lang-inline="de">Für die Schülerdaten in EduGrade brauchen wir einen kurzen Vertrag mit dir &ndash; das schreibt die DSGVO vor. Das dauert nur eine Minute.</span><span data-lang-inline="en">For the student data in EduGrade we need a short agreement with you &ndash; the GDPR requires it. It only takes a minute.</span>{% endif %}</p>
+                </header>
+                <section>
+                    <ol class="dpa-steps">
+                        <li><span data-lang-inline="de"><strong>Durchlesen:</strong> Oben steht das Wichtigste in Kürze, darunter der vollständige Vertrag.</span><span data-lang-inline="en"><strong>Read:</strong> The key points are at the top, followed by the full agreement.</span></li>
+                        <li><span data-lang-inline="de"><strong>Ausfüllen:</strong> Unten deinen Namen und &ndash; falls zutreffend &ndash; deine Schule eintragen.</span><span data-lang-inline="en"><strong>Fill in:</strong> Enter your name and &ndash; if applicable &ndash; your school at the bottom.</span></li>
+                        <li><span data-lang-inline="de"><strong>Unterzeichnen:</strong> Häkchen setzen und auf &bdquo;Verbindlich unterzeichnen&ldquo; klicken. Damit du den Vertrag in Ruhe lesen kannst, ist das erst nach einer Minute möglich. Danach geht es direkt in die App.</span><span data-lang-inline="en"><strong>Sign:</strong> Tick the box and click &ldquo;Sign bindingly&rdquo;. So you can read the agreement in peace, this is only possible after one minute. Then you go straight to the app.</span></li>
+                    </ol>
+                </section>
+                <footer class="flex justify-end">
+                    <button type="button" class="btn-primary w-full sm:w-auto" id="dpa-intro-ok"><span data-lang-inline="de">Vertrag lesen</span><span data-lang-inline="en">Read agreement</span></button>
+                </footer>
+            </div>
+        </dialog>
+
+{% include '_legal_footer.html' %}
+    <script src="/static/scripts/avocloud-logo.js"></script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+    }
+    </script>
+    <script>
+    (() => {
+        const form = document.getElementById('dpa-sign-form');
+        const btn = document.getElementById('dpa-submit');
+        const err = document.getElementById('dpa-error');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            err.classList.add('hidden');
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/dpa/accept', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({
+                        name: document.getElementById('dpa-name').value,
+                        school: document.getElementById('dpa-school').value,
+                        accepted: document.getElementById('dpa-accept').checked,
+                        version: '{{ dpa_version }}'
+                    })
+                });
+                if (res.status === 401) { window.location.href = '/login'; return; }
+                const data = await res.json().catch(() => ({}));
+                if (data.success) { window.location.href = '/'; return; }
+                err.classList.remove('hidden');
+            } catch (_) {
+                err.classList.remove('hidden');
+            }
+            btn.disabled = !unlocked;
+        });
+        // Signing unlocks one minute after the intro dialog is closed,
+        // so the contract actually gets read.
+        const READ_SECONDS = 60;
+        const wait = document.getElementById('dpa-wait');
+        let unlocked = false;
+        const startReadTimer = () => {
+            const until = Date.now() + READ_SECONDS * 1000;
+            const tick = () => {
+                const left = Math.ceil((until - Date.now()) / 1000);
+                if (left <= 0) {
+                    unlocked = true;
+                    btn.disabled = false;
+                    wait.textContent = '';
+                    return;
+                }
+                wait.textContent = window.getLegalLang() === 'en'
+                    ? `You can sign in ${left} second${left === 1 ? '' : 's'} – please read the agreement in the meantime.`
+                    : `Unterzeichnen in ${left} Sekunde${left === 1 ? '' : 'n'} möglich – bitte lies den Vertrag in der Zwischenzeit.`;
+                setTimeout(tick, 1000);
+            };
+            tick();
+        };
+        const intro = document.getElementById('dpa-intro-dialog');
+        intro.addEventListener('close', startReadTimer, { once: true });
+        document.getElementById('dpa-intro-ok').addEventListener('click', () => intro.close());
+        intro.showModal();
+
+        document.getElementById('dpa-logout').addEventListener('click', async () => {
+            try { await fetch('/api/logout', { method: 'POST' }); } catch (_) { /* ignore */ }
+            window.location.href = '/login';
+        });
+    })();
+    </script>
+</body>
+
+</html>

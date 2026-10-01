@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="de" data-title-de="Datenschutzerklärung - EduGrade" data-title-en="Privacy Policy - EduGrade">
+<html lang="de" data-title-de="Auftragsverarbeitungsvertrag - EduGrade" data-title-en="Data Processing Agreement - EduGrade">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>Datenschutzerklärung - EduGrade</title>
+    <title>Auftragsverarbeitungsvertrag - EduGrade</title>
     <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v={{ app_version }}">
     <link rel="manifest" href="/static/manifest.json?v={{ app_version }}">
     <meta name="theme-color" content="#0B0B0B">
@@ -54,37 +54,41 @@
             margin-right: 0.75rem;
             flex-shrink: 0;
         }
-        .pp p, .pp li, .pp td { color: oklch(.708 0 0); }
-        .pp ul { list-style: disc; padding-left: 1.25rem; }
-        .pp li { margin-top: 0.35rem; }
-        .pp h4 { font-weight: 600; margin-top: 1rem; margin-bottom: 0.25rem; }
-        .pp table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        .pp th, .pp td { text-align: left; padding: 0.5rem; border-bottom: 1px solid oklch(.4 0 0 / .4); vertical-align: top; }
-        .pp a { color: rgb(96 165 250); }
-        .pp a:hover { text-decoration: underline; }
+        .avv-body p, .avv-body li { color: oklch(.708 0 0); }
+        .avv-body ol { list-style: decimal; padding-left: 1.25rem; }
+        .avv-body ul { list-style: disc; padding-left: 1.25rem; }
+        .avv-body li { margin-top: 0.35rem; }
+        .avv-body table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .avv-body th, .avv-body td { text-align: left; padding: 0.5rem; border-bottom: 1px solid oklch(.4 0 0 / .4); vertical-align: top; }
+        .avv-body th { color: inherit; font-weight: 600; }
     </style>
 </head>
 
 <body>
     <div id="app" class="mx-auto px-4 sm:px-10 lg:px-16 py-6" style="max-width: 60rem;">
         <header class="flex items-center justify-between gap-2 mb-8">
-            <a href="/" class="btn-outline flex items-center gap-2">
+            <a href="/privacy" class="btn-outline flex items-center gap-2">
                 <svg class="lucide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6" />
                 </svg>
-                <span data-lang-inline="de">Zurück zur App</span><span data-lang-inline="en">Back to app</span>
+                <span data-lang-inline="de">Datenschutz</span><span data-lang-inline="en">Privacy</span>
             </a>
-            <div class="flex items-center gap-2">
-                <a href="/avv" class="btn-outline"><span data-lang-inline="de">AVV</span><span data-lang-inline="en">DPA</span></a>
-                <div class="legal-lang-switch" role="group" aria-label="Language"><button type="button" data-set-lang="de">DE</button><button type="button" data-set-lang="en">EN</button></div>
-            </div>
+            <div class="legal-lang-switch" role="group" aria-label="Language"><button type="button" data-set-lang="de">DE</button><button type="button" data-set-lang="en">EN</button></div>
         </header>
 
+        <section class="card hero-gradient text-white mb-8">
+            <div class="p-6 sm:p-8 text-center">
+                <h2 class="text-2xl sm:text-4xl font-bold mb-4" style="hyphens: manual; overflow-wrap: anywhere;"><span data-lang-inline="de">Auftrags&shy;verarbeitungs&shy;vertrag</span><span data-lang-inline="en">Data Processing Agreement</span></h2>
+                <p class="text-xl opacity-90 mb-2"><span data-lang-inline="de">gemäß Art.&nbsp;28 DSGVO</span><span data-lang-inline="en">pursuant to Art.&nbsp;28 GDPR</span></p>
+                <p class="text-sm opacity-70">Version {{ dpa_version }} &middot; <span data-lang-inline="de">Stand: Oktober 2026</span><span data-lang-inline="en">Last updated: October 2026</span></p>
+            </div>
+        </section>
+
         <div data-lang-block="de">
-{% include '_privacy_de.html' %}
+{% include '_dpa_content.html' %}
         </div>
         <div data-lang-block="en">
-{% include '_privacy_en.html' %}
+{% include '_dpa_content_en.html' %}
         </div>
 
 {% include '_legal_footer.html' %}

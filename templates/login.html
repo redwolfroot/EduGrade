@@ -16,9 +16,10 @@
     <meta name="apple-mobile-web-app-title" content="EduGrade">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v={{ app_version }}">
     <script src="/static/scripts/resource-guard.js?v={{ app_version }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.10-beta.2/dist/basecoat.cdn.min.css" integrity="sha384-6dC3cDSMqy9z8ebhUdgkcvps0xEecjrA8dH320F43+mp8jEVgjsCiWRAjGTeLK6v" crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.10-beta.2/dist/js/all.min.js" integrity="sha384-4km2iBe4ctopbIOD4zwPsKKoMQsTsYGXAnxBpgIalcQgzegu7w4e+JZMt/BbzScI" crossorigin="anonymous" defer></script>
+    <script src="/static/scripts/domain-move.js?v={{ app_version }}"></script>
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <link rel="stylesheet" href="/static/vendor/basecoat.min.css">
+    <script src="/static/vendor/basecoat-all.min.js" defer></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
     <link rel="stylesheet" href="/static/css/avocloud-branding.css?v={{ app_version }}">
     <script src="/static/scripts/theme.js?v={{ app_version }}"></script>
@@ -58,6 +59,34 @@
         .auth-card {
             width: 100%;
             max-width: 420px;
+        }
+        /* Icon links use inline-flex, which would otherwise beat the hidden attribute. */
+        button[hidden] { display: none !important; }
+        /* Email locked during the password step: clearly greyed out, no caret.
+           readonly instead of disabled so password managers still see the address. */
+        #login-email.is-locked {
+            opacity: 0.55;
+            cursor: pointer;
+            caret-color: transparent;
+            user-select: none;
+            padding-right: 6.5rem;
+        }
+        .email-change-btn {
+            position: absolute;
+            right: 0.375rem;
+            top: 50%;
+            transform: translateY(-50%);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-size: 0.8125rem;
+            font-weight: 500;
+        }
+        .email-change-btn:hover,
+        #login-email.is-locked:hover + .email-change-btn {
+            background: color-mix(in srgb, currentColor 14%, transparent);
         }
         .device-code-icon {
             display: flex;
@@ -220,16 +249,17 @@
                                 <form id="login-form" class="form grid gap-4">
                                     <div class="grid gap-2">
                                         <label for="login-email" data-i18n="auth.email">Email</label>
-                                        <input type="email" id="login-email" name="email" class="input" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder" data-icon="mail">
+                                        <div class="relative">
+                                            <input type="email" id="login-email" name="email" class="input w-full" required autocomplete="email" placeholder="your@email.com" data-i18n-placeholder="auth.emailPlaceholder" data-icon="mail">
+                                            <!-- Shown inside the field once it is locked (password step) -->
+                                            <button type="button" id="login-change-email-btn" class="email-change-btn text-blue-400" hidden><svg class="lucide lucide-pencil shrink-0" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span data-i18n="auth.changeEmailShort">Change</span></button>
+                                        </div>
                                     </div>
 
                                     <!-- Email-first: the password step only appears for accounts
                                          without a paired phone (those sign in with the phone's code). -->
                                     <div class="grid gap-2" id="login-password-group" hidden>
-                                        <div class="flex items-center justify-between">
-                                            <label for="login-password" data-i18n="auth.password">Password</label>
-                                            <button type="button" id="login-change-email-btn" class="text-xs text-blue-400 hover:underline" data-i18n="auth.changeEmail">Use a different email</button>
-                                        </div>
+                                        <label for="login-password" data-i18n="auth.password">Password</label>
                                         <input type="password" id="login-password" name="password" class="input" autocomplete="current-password" placeholder="Your password" data-i18n-placeholder="auth.passwordPlaceholder" data-icon="lock">
                                     </div>
 
@@ -243,7 +273,7 @@
                                     </button>
 
                                     <div class="text-center mt-3">
-                                        <button type="button" id="forgot-password-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.forgotPassword">Forgot password?</button>
+                                        <button type="button" id="forgot-password-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-key-round shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg><span data-i18n="auth.forgotPassword">Forgot password?</span></button>
                                     </div>
                                 </form>
                             </div>
@@ -377,8 +407,8 @@
                             </form>
 
                             <div class="text-center mt-3 flex flex-col gap-2">
-                                <button type="button" id="switch-to-email-reset-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.noRecoveryKey">No recovery key?</button>
-                                <button type="button" id="back-to-login-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.backToLogin">Back to Sign In</button>
+                                <button type="button" id="switch-to-email-reset-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-mail shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg><span data-i18n="auth.noRecoveryKey">No recovery key?</span></button>
+                                <button type="button" id="back-to-login-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-arrow-left shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span data-i18n="auth.backToLogin">Back to Sign In</span></button>
                             </div>
                         </div>
 
@@ -404,7 +434,7 @@
                             </form>
 
                             <div class="text-center mt-3 flex flex-col gap-2">
-                                <button type="button" id="switch-to-key-reset-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.haveRecoveryKey">I have a recovery key</button>
+                                <button type="button" id="switch-to-key-reset-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-key shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg><span data-i18n="auth.haveRecoveryKey">I have a recovery key</span></button>
                                 <!-- SECURITY: the logged-out "Send Recovery Key via Email" flow was removed.
                                      It let anyone controlling a user's mailbox obtain the plaintext recovery
                                      key and take over the account including all encrypted data. Logged-in
@@ -420,21 +450,46 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
                             </div>
                             <div class="text-center grid gap-1">
-                                <h2 class="text-lg font-semibold" data-i18n="auth.deviceCodeTitle">Confirm on your phone</h2>
+                                <h2 id="device-code-title" class="text-lg font-semibold" data-i18n="auth.deviceCodeTitle">Confirm on your phone</h2>
                                 <p id="device-code-hint" class="text-sm" style="color: var(--muted-foreground);"></p>
                             </div>
                             <form id="device-code-form" class="form grid gap-3">
                                 <label for="device-code-input" class="sr-only" data-i18n="auth.deviceCodeLabel">6-digit code</label>
                                 <input type="text" id="device-code-input" class="input device-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000000" spellcheck="false" required>
                                 <p id="device-code-timer" class="text-xs text-center" style="color: var(--muted-foreground);"></p>
+                                <p id="email-code-spam-hint" class="text-xs text-center" style="color: var(--muted-foreground);" hidden data-i18n="auth.emailCodeSpamHint">Nothing arrived? Please check your spam folder.</p>
                                 <button type="submit" class="btn-primary is-cta w-full" id="device-code-btn">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                                     <span data-i18n="auth.deviceCodeConfirm">Sign in</span>
                                 </button>
                             </form>
-                            <div class="text-center flex flex-col gap-2">
-                                <button type="button" id="device-lost-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.deviceLost">Lost your phone or reinstalled the app?</button>
-                                <button type="button" id="device-code-back-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.backToLogin">Back to Sign In</button>
+                            <div class="text-center flex flex-col gap-3">
+                                <button type="button" id="email-resend-btn" class="text-sm text-blue-400 hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5" hidden><svg class="lucide lucide-refresh-cw shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg><span id="email-resend-label"></span></button>
+                                <button type="button" id="email-code-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-mail shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg><span data-i18n="auth.emailCodeFallback">Phone not at hand? Sign in with password and email code</span></button>
+                                <button type="button" id="device-lost-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-smartphone shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg><span data-i18n="auth.deviceLost">Lost your phone or reinstalled the app?</span></button>
+                                <button type="button" id="device-code-back-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-arrow-left shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span data-i18n="auth.backToLogin">Back to Sign In</span></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Phone not at hand: password + one-time code by email -->
+                    <div id="panel-email-code" hidden>
+                        <div class="py-4 grid gap-4">
+                            <div class="text-center grid gap-1">
+                                <h2 class="text-lg font-semibold" data-i18n="auth.emailCodeTitle">Sign in without your phone</h2>
+                                <p class="text-sm" style="color: var(--muted-foreground);" data-i18n="auth.emailCodeText">Enter your password. We'll then send a one-time code to your email address.</p>
+                            </div>
+                            <form id="email-code-form" class="form grid gap-4">
+                                <div class="grid gap-2">
+                                    <label for="email-code-password" data-i18n="auth.password">Password</label>
+                                    <input type="password" id="email-code-password" class="input" required autocomplete="current-password" placeholder="Your password" data-i18n-placeholder="auth.passwordPlaceholder">
+                                </div>
+                                <button type="submit" class="btn-primary is-cta w-full" id="email-code-submit">
+                                    <span data-i18n="auth.emailCodeSubmit">Send code</span>
+                                </button>
+                            </form>
+                            <div class="text-center">
+                                <button type="button" id="email-code-back-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-arrow-left shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span data-i18n="auth.back">Back</span></button>
                             </div>
                         </div>
                     </div>
@@ -460,7 +515,7 @@
                                 </button>
                             </form>
                             <div class="text-center">
-                                <button type="button" id="device-lost-back-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.back">Back</button>
+                                <button type="button" id="device-lost-back-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-arrow-left shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span data-i18n="auth.back">Back</span></button>
                             </div>
                         </div>
                     </div>
@@ -491,7 +546,7 @@
                                 </button>
 
                                 <div class="text-center">
-                                    <button type="button" id="token-back-to-login-btn" class="text-sm text-blue-400 hover:underline" data-i18n="auth.backToLogin">Back to Sign In</button>
+                                    <button type="button" id="token-back-to-login-btn" class="text-sm text-blue-400 hover:underline inline-flex items-center justify-center gap-1.5"><svg class="lucide lucide-arrow-left shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span data-i18n="auth.backToLogin">Back to Sign In</span></button>
                                 </div>
                             </form>
                         </div>
@@ -593,12 +648,14 @@
 
         const panelDeviceCode = document.getElementById('panel-device-code');
         const panelDeviceLost = document.getElementById('panel-device-lost');
+        const panelEmailCode = document.getElementById('panel-email-code');
 
         function hideAllCustomPanels() {
             panelReset.hidden = true;
             panelTokenReset.hidden = true;
             panelDeviceCode.hidden = true;
             panelDeviceLost.hidden = true;
+            panelEmailCode.hidden = true;
             stopDeviceCodeTimer();
         }
 
@@ -638,6 +695,11 @@
             pwGroup.hidden = step !== 'password';
             pw.required = step === 'password';
             email.readOnly = step === 'password';
+            email.classList.toggle('is-locked', step === 'password');
+            email.tabIndex = step === 'password' ? -1 : 0;
+            email.setAttribute('aria-disabled', step === 'password' ? 'true' : 'false');
+            email.title = step === 'password' ? t('auth.changeEmailHint') : '';
+            document.getElementById('login-change-email-btn').hidden = step !== 'password';
             const label = document.getElementById('login-btn-text');
             label.dataset.i18n = step === 'password' ? 'auth.signIn' : 'auth.continue';
             label.textContent = t(label.dataset.i18n);
@@ -645,10 +707,19 @@
             else pw.value = '';
         }
 
-        document.getElementById('login-change-email-btn').addEventListener('click', () => {
+        function unlockLoginEmail() {
             setLoginStep('email');
             document.getElementById('login-email').focus();
+        }
+
+        // Clicking the locked (greyed) email field unlocks it for editing.
+        document.getElementById('login-email').addEventListener('mousedown', (e) => {
+            if (!e.currentTarget.classList.contains('is-locked')) return;
+            e.preventDefault();
+            unlockLoginEmail();
         });
+
+        document.getElementById('login-change-email-btn').addEventListener('click', unlockLoginEmail);
 
         async function startLogin(force) {
             const btn = document.getElementById('login-btn');
@@ -682,7 +753,9 @@
         }
 
         // ---- Paired phone: one-time code step ----
-        let devicePending = null;   // { id, device, expiresAt }
+        let devicePending = null;   // { id, device, expiresAt, viaEmail, verify }
+        // Code mailed right after registering; its step opens once the recovery key is saved.
+        let registerVerify = null;  // { pendingId, email, expiresAt, resendAt }
         let deviceCodeTimer = null;
 
         function stopDeviceCodeTimer() {
@@ -690,11 +763,16 @@
             deviceCodeTimer = null;
         }
 
+        // Same code step for both channels: phone code, or (phone not at hand) email code.
         function showDeviceCodePanel(data) {
+            const viaEmail = data.code === 'email_code_required';
+            const verify = !!data.verify;
             devicePending = {
                 id: data.pending_id,
                 device: data.device_name || '',
-                expiresAt: Date.now() + (data.expires_in || 180) * 1000
+                expiresAt: Date.now() + (data.expires_in || 180) * 1000,
+                viaEmail,
+                verify
             };
             authTabsNav.style.display = 'none';
             panelLogin.hidden = true;
@@ -702,9 +780,21 @@
             document.getElementById('panel-register-org').hidden = true;
             hideAllCustomPanels();
             panelDeviceCode.hidden = false;
-            document.getElementById('device-code-hint').textContent = devicePending.device
-                ? t('auth.deviceCodeHint', { device: devicePending.device })
-                : t('auth.deviceCodeHintNoName');
+            const title = document.getElementById('device-code-title');
+            title.dataset.i18n = verify ? 'auth.verifyEmailTitle' : viaEmail ? 'auth.emailCodeSentTitle' : 'auth.deviceCodeTitle';
+            title.textContent = t(title.dataset.i18n);
+            document.getElementById('device-code-hint').textContent = verify
+                ? t('auth.verifyEmailHint', { email: document.getElementById('login-email').value })
+                : viaEmail
+                ? t('auth.emailCodeSentHint', { email: document.getElementById('login-email').value })
+                : devicePending.device
+                    ? t('auth.deviceCodeHint', { device: devicePending.device })
+                    : t('auth.deviceCodeHintNoName');
+            document.getElementById('email-code-btn').hidden = viaEmail;
+            document.getElementById('device-lost-btn').hidden = viaEmail;
+            document.getElementById('email-code-spam-hint').hidden = !viaEmail;
+            document.getElementById('email-resend-btn').hidden = !viaEmail;
+            if (viaEmail) startResendCooldown(data.resend_in ?? 60);
             const input = document.getElementById('device-code-input');
             input.value = '';
             input.disabled = false;
@@ -727,6 +817,54 @@
             tick();
             deviceCodeTimer = setInterval(tick, 1000);
         }
+
+        // "Resend code" for the email channel, locked for a minute after each mail.
+        let resendTimer = null;
+        function startResendCooldown(seconds) {
+            const btn = document.getElementById('email-resend-btn');
+            const until = Date.now() + seconds * 1000;
+            const tick = () => {
+                const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+                btn.disabled = left > 0;
+                document.getElementById('email-resend-label').textContent = left > 0 ? t('auth.emailCodeResendIn', { seconds: left }) : t('auth.emailCodeResend');
+                if (left === 0 && resendTimer) { clearInterval(resendTimer); resendTimer = null; }
+            };
+            if (resendTimer) clearInterval(resendTimer);
+            resendTimer = setInterval(tick, 1000);
+            tick();
+        }
+
+        document.getElementById('email-resend-btn').addEventListener('click', async () => {
+            if (!devicePending) return;
+            const btn = document.getElementById('email-resend-btn');
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/login/resend-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pending_id: devicePending.id })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    // Re-open the step: restarts the timer and re-enables an expired input.
+                    showDeviceCodePanel({
+                        code: 'email_code_required',
+                        pending_id: devicePending.id,
+                        expires_in: data.expires_in || 600,
+                        resend_in: data.resend_in ?? 60,
+                        verify: devicePending.verify
+                    });
+                    showToast(t(data.message), 'success');
+                    return;
+                }
+                showToast(t(data.message || 'error.somethingWrong', data.message_params || {}));
+                if (response.status === 410) { devicePending = null; showLoginPanel(); return; }
+                if (data.resend_in) { startResendCooldown(data.resend_in); return; }
+            } catch (err) {
+                showToast(t('error.somethingWrong'));
+            }
+            btn.disabled = false;
+        });
 
         document.getElementById('device-code-input').addEventListener('input', (e) => {
             const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
@@ -752,7 +890,7 @@
                 const data = await response.json();
                 if (data.success) {
                     stopDeviceCodeTimer();
-                    await finishLoginFlow(data);
+                    await finishLoginFlow(data, devicePending.verify);
                     return;
                 }
                 if (response.status === 429) {
@@ -778,20 +916,75 @@
             showLoginPanel();
         });
 
-        document.getElementById('device-lost-btn').addEventListener('click', () => {
+        document.getElementById('email-code-btn').addEventListener('click', () => {
             hideAllCustomPanels();
-            panelDeviceLost.hidden = false;
-            document.getElementById('device-lost-password').focus();
+            panelEmailCode.hidden = false;
+            // Came via password step (passwordless locked)? Then reuse what was typed.
+            document.getElementById('email-code-password').value = document.getElementById('login-password').value;
+            document.getElementById('email-code-password').focus();
         });
 
-        document.getElementById('device-lost-back-btn').addEventListener('click', () => {
+        function backToDeviceCode() {
             if (devicePending) showDeviceCodePanel({
                 pending_id: devicePending.id,
                 device_name: devicePending.device,
                 expires_in: Math.max(0, (devicePending.expiresAt - Date.now()) / 1000)
             });
             else showLoginPanel();
+        }
+
+        document.getElementById('email-code-back-btn').addEventListener('click', backToDeviceCode);
+
+        async function requestEmailCode(force) {
+            const btn = document.getElementById('email-code-submit');
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('login-email').value,
+                        password: document.getElementById('email-code-password').value,
+                        second_factor: 'email',
+                        force: !!force
+                    })
+                });
+                const data = await response.json();
+                if (response.status === 409) {
+                    btn.disabled = false;
+                    if (await showSessionConflictDialog()) await requestEmailCode(true);
+                    return;
+                }
+                if (response.status === 202 && data.code === 'email_code_required') {
+                    document.getElementById('email-code-password').value = '';
+                    showDeviceCodePanel(data);
+                } else if (data.success) {
+                    // Pairing was removed meanwhile → plain password login went through.
+                    await finishLoginFlow(data);
+                    return;
+                } else if (response.status === 429) {
+                    showRateLimitDialog(data.message ? t(data.message, data.message_params || {}) : null);
+                } else {
+                    showToast(t(data.message || 'auth.loginFailed', data.message_params || {}));
+                }
+            } catch (err) {
+                showToast(t('error.somethingWrong'));
+            }
+            btn.disabled = false;
+        }
+
+        document.getElementById('email-code-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await requestEmailCode(false);
         });
+
+        document.getElementById('device-lost-btn').addEventListener('click', () => {
+            hideAllCustomPanels();
+            panelDeviceLost.hidden = false;
+            document.getElementById('device-lost-password').focus();
+        });
+
+        document.getElementById('device-lost-back-btn').addEventListener('click', backToDeviceCode);
 
         document.getElementById('device-lost-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -933,7 +1126,7 @@
 
         // Everything after the session exists: recovery-key nag, then into the app.
         // Shared by the password login and the paired-phone code step.
-        async function finishLoginFlow(data) {
+        async function finishLoginFlow(data, justVerified = false) {
             // If user has no recovery key, generate one and show it before proceeding
             if (data.needs_recovery_key) {
                 try {
@@ -955,7 +1148,7 @@
                 }
             }
 
-            showToast(t('auth.welcomeBack'), 'success');
+            showToast(t(justVerified ? 'auth.emailVerified' : 'auth.welcomeBack'), 'success');
             await delay(300);
             sessionStorage.setItem('avoShowIntro', '1');
             window.location.href = '/';
@@ -1004,7 +1197,7 @@
 
                 const data = await response.json();
 
-                if (response.status === 202 && data.code === 'device_code_required') {
+                if (response.status === 202 && ['device_code_required', 'email_code_required'].includes(data.code)) {
                     hideProgress();
                     btn.disabled = false;
                     btn.innerHTML = originalHtml;
@@ -1138,6 +1331,12 @@
                     await delay(400);
 
                     hideProgress();
+                    registerVerify = data.verify ? {
+                        pendingId: data.verify.pending_id,
+                        email: document.getElementById('register-email').value.trim(),
+                        expiresAt: Date.now() + data.verify.expires_in * 1000,
+                        resendAt: Date.now() + data.verify.resend_in * 1000
+                    } : null;
 
                     // Show recovery key dialog before switching to login
                     if (data.recovery_key) {
@@ -1253,6 +1452,12 @@
                     await delay(400);
 
                     hideProgress();
+                    registerVerify = data.verify ? {
+                        pendingId: data.verify.pending_id,
+                        email: document.getElementById('register-org-email').value.trim(),
+                        expiresAt: Date.now() + data.verify.expires_in * 1000,
+                        resendAt: Date.now() + data.verify.resend_in * 1000
+                    } : null;
 
                     // Show recovery key dialog (with join code) before switching to login
                     if (data.recovery_key) {
@@ -1309,8 +1514,21 @@
 
         document.getElementById('recovery-key-continue-btn').addEventListener('click', () => {
             document.getElementById('recovery-key-dialog').close();
-            showToast(t('auth.accountCreated'), 'success');
             document.getElementById('tab-login').click();
+            if (registerVerify) {
+                // Confirm the email: same code step as the email login, signs in afterwards.
+                document.getElementById('login-email').value = registerVerify.email;
+                showDeviceCodePanel({
+                    code: 'email_code_required',
+                    pending_id: registerVerify.pendingId,
+                    expires_in: Math.max(0, (registerVerify.expiresAt - Date.now()) / 1000),
+                    resend_in: Math.max(0, Math.ceil((registerVerify.resendAt - Date.now()) / 1000)),
+                    verify: true
+                });
+                registerVerify = null;
+            } else {
+                showToast(t('auth.accountCreated'), 'success');
+            }
             const flow = document.getElementById('recovery-key-dialog').dataset.flow;
             if (flow === 'register-org') {
                 document.getElementById('register-org-form').reset();
@@ -1478,6 +1696,7 @@
         });
     });
     </script>
+    <script src="/static/scripts/password-toggle.js?v={{ app_version }}"></script>
     <script src="/static/scripts/avocloud-logo.js"></script>
     <script src="/static/scripts/app-promo.js?v={{ app_version }}"></script>
     <script>
