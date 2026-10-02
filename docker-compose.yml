@@ -8,8 +8,11 @@ services:
       - "8080:1601" 
     volumes:
       - edugrade-data:/app/data
+      - edugrade-backups:/app/backups
     environment:
       - QUART_ENV=production
+      # Key for the encrypted daily DB backup (set it in .env, never commit it).
+      - BACKUP_KEY=${BACKUP_KEY:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:1601/api/version')"]
@@ -20,4 +23,6 @@ services:
 
 volumes:
   edugrade-data:
+    driver: local
+  edugrade-backups:
     driver: local

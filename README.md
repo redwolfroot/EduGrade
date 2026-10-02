@@ -180,8 +180,44 @@ docker exec -it edugrade python manage.py
 | `announce` | Wizard for a new announcement: type (info / alert / danger), title, text, optional English version, end date |
 | `announcements [all]` | List live (or all) announcements |
 | `unannounce [nr\|id\|all]` | End an announcement |
+| `backup` | Create an encrypted database backup now (needs `BACKUP_KEY`) |
+| `restore [file]` | List backups, or restore one (server must be stopped, see below) |
 
 Announcements appear as a dialog after login (web) or when the app is opened. Several are shown one after another, oldest first; each user sees each one until they press **OK** (on any device). Changes take effect immediately, no restart needed. Type `abbrechen` to cancel the wizard. Single commands also work non-interactively, e.g. `python manage.py stats`.
+
+## Backups and Restore
+
+The server writes an encrypted backup of the SQLite database once a day (first cleanup tick after midnight UTC) to `/app/backups` (volume `edugrade-backups` in `docker-compose.yml`).
+
+- The copy is taken with SQLite's online backup API, so it is consistent while the server runs. It is encrypted in memory with AES-256-GCM (key derived with scrypt from `BACKUP_KEY` and a random per-file salt); no plaintext copy is written to disk.
+- **`BACKUP_KEY` must be set** (e.g. in a `.env` file next to `docker-compose.yml`: `BACKUP_KEY=<long random secret>`). Without it no backup is made and a warning is logged. Keep the key outside the data volume and store it safely: without it a backup cannot be restored.
+- Files are named `edugrade-YYYY-MM-DD_HHMMSS.db.enc` and deleted automatically after **30 days**. This matches the retention promised in the privacy policy and the DPA.
+- A backup on the same server does not protect against losing the server. Copy `/app/backups` off-site (host cron job with rclone/WebDAV or similar); the encrypted files are safe to transfer.
+- Manual backup: `docker exec -it edugrade python manage.py backup`.
+
+### Restore
+
+The server must be stopped, otherwise the database is in use.
+
+```bash
+docker compose stop edugrade
+docker compose run --rm -it edugrade python manage.py restore            # lists the backups
+docker compose run --rm -it edugrade python manage.py restore edugrade-2026-10-02_031500.db.enc
+docker compose up -d edugrade
+```
+
+The command decrypts the file, checks it with `PRAGMA integrity_check` and only then replaces `data/edugrade.db`. The previous database stays next to it as `edugrade.db.before-restore-<timestamp>`; delete it once the restored system works. `BACKUP_KEY` must be set for the `run` command as well (compose passes it through). Test a restore regularly (at least once a year) and note the date.
+
+## Betrieb: Log-Aufbewahrung
+
+Server logs must not be kept longer than 30 days (privacy policy, section 10).
+
+- The app logs no IP addresses and e-mail addresses only through `_scrub_email`; Hypercorn writes no access log (the `Dockerfile` has no `--access-logfile`). Keep it that way.
+- `docker-compose.yml` deliberately has **no** `logging:` block: it would override the host's journald driver, and `json-file`/`local` limit size, not age.
+- **Host requirement:** Docker uses the `journald` log driver and journald keeps logs at most 30 days (`/etc/systemd/journald.conf.d/retention.conf` with `MaxRetentionSec=30day`). After changing the driver, recreate the stack with `docker compose up -d --force-recreate`; run `journalctl --vacuum-time=30d` once.
+  - **Add** `"log-driver": "journald"` to an existing `/etc/docker/daemon.json`; never overwrite the file (it may already hold `ipv6` and other settings). Create it only if it does not exist.
+  - **Pterodactyl:** the game servers' container logs follow `docker.log_config` in `/etc/pterodactyl/config.yml`, not `daemon.json`. After `systemctl restart docker`, run `systemctl restart wings` and start the servers again from the panel.
+- **Reverse proxy (Nginx Proxy Manager):** its own nginx logs are rotated by a custom logrotate file with `rotate 3` and `weekly` (oldest log at most 28 days), mounted as `- /opt/npm/logrotate-npm:/etc/logrotate.d/nginx-proxy-manager`. **Do not mount it with `:ro`:** NPM runs `chmod` on that file at start; with `:ro` the start fails (`s6-rc: unable to start service prepare`), the container still shows "Up" but ports 80/443 stay closed.
 
 ## Student Access & Sharing
 

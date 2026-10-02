@@ -172,6 +172,32 @@
         </div>
     </dialog>
 
+    <!-- Zustimmung zu geänderten Nutzungsbedingungen (termsModal.js, POST /api/terms/accept). Solange nicht zugestimmt ist, sperrt der Server schreibende API-Aufrufe -->
+    <script>window.__termsRequired = {{ 'true' if terms_required else 'false' }};</script>
+    <dialog id="terms-dialog" class="dialog w-full sm:max-w-[480px]" data-version="{{ terms_version }}"
+        aria-labelledby="terms-dialog-title" aria-describedby="terms-dialog-text">
+        <div>
+            <header>
+                <h2 id="terms-dialog-title" class="text-lg font-semibold" data-i18n="terms.modal.title">Updated terms of service</h2>
+            </header>
+            <section class="py-4 grid gap-3">
+                <p id="terms-dialog-text" class="text-sm" data-i18n="terms.modal.intro">We have updated our terms of service. Please read and accept them to keep editing your data.</p>
+                <ul class="text-sm list-disc pl-5 grid gap-1">
+                    <li data-i18n="terms.modal.change1">Material changes only apply once you accept them in the app.</li>
+                    <li data-i18n="terms.modal.change2">Responsibility for data protection: use EduGrade for your school only with your principal's approval.</li>
+                    <li data-i18n="terms.modal.change3">Do not enter health information, diagnoses or religious beliefs. Calculated averages are only a tool; you set the grade.</li>
+                    <li data-i18n="terms.modal.change4">The licence section was corrected (AGPL-3.0) and the notice period for discontinuing the service is now three months.</li>
+                </ul>
+                <p class="text-sm"><a href="/terms" target="_blank" class="text-blue-400 hover:underline" data-i18n="terms.modal.read">Read the full terms of service</a></p>
+                <p class="text-xs" style="color: var(--muted-foreground);" data-i18n="terms.modal.locked">Until you accept, you can read and export your data, but changes cannot be saved.</p>
+            </section>
+            <footer class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                <button type="button" id="terms-export-delete-btn" class="btn-outline" data-i18n="terms.modal.exportDelete">Export data and delete account</button>
+                <button type="button" id="terms-accept-btn" class="btn-primary is-cta" data-i18n="terms.modal.accept">Accept</button>
+            </footer>
+        </div>
+    </dialog>
+
     <div id="app">
         <!-- Mobile-only header: shows the EduGrade logo and a documentation
              link at the very top of the page on phones. Scrolls away with the
@@ -931,6 +957,7 @@
                                 <p class="text-xs mb-2" style="color: var(--muted-foreground);" data-i18n="auth.email">Email</p>
                                 <p id="profile-recovery-key-email-display" class="font-mono text-lg font-bold tracking-widest text-center"></p>
                             </div>
+                            <p class="text-sm" style="color: var(--muted-foreground);" data-i18n="recovery.emailWarning">The email with the recovery key stays in your mailbox with your email provider. Anyone with access to your mailbox can reset your password with it. Better save the recovery key yourself and delete the email.</p>
                             <button type="button" class="btn-primary w-full" id="profile-recovery-key-email-send-btn">
                                 <svg class="lucide lucide-mail-icon lucide-mail" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect width="20" height="16" x="2" y="4" rx="2"/>
@@ -2358,6 +2385,7 @@ Anna,,Schmidt</code></pre>
     <script src="/static/scripts/appDownload.js?v={{ app_version }}"></script>
     <script src="/static/scripts/donatePrompt.js?v={{ app_version }}"></script>
     <script src="/static/scripts/announcement.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/termsModal.js?v={{ app_version }}"></script>
     <script src="/static/scripts/mobile.js?v={{ app_version }}"></script>
     <script src="/static/scripts/app-promo.js?v={{ app_version }}"></script>
 
@@ -3238,7 +3266,8 @@ Anna,,Schmidt</code></pre>
                 </div>
                 <div class="class-exam-entry-controls">
                     <button class="class-exam-absent-btn" id="class-exam-absent-btn" data-i18n="classExam.absent">Abwesend – überspringen</button>
-                    <textarea id="class-exam-note" class="class-exam-note-field" rows="2" placeholder="Notiz zur Note (optional)..."></textarea>
+                    <textarea id="class-exam-note" class="class-exam-note-field" rows="2" placeholder="Notiz zur Note (optional)..." data-i18n-placeholder="classExam.notePlaceholder"></textarea>
+                    <p class="text-muted text-xs" style="color: var(--muted-foreground);" data-i18n="privacy.sensitiveHint">Bitte keine Gesundheitsangaben, Diagnosen oder Angaben zur Religion eintragen.</p>
                     <button id="class-exam-continue-later" class="btn-outline w-full" style="margin-top:0.5rem;padding:0.6rem;"><svg class="lucide lucide-clock" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> <span data-i18n="classExam.continueLater">Später fortsetzen (Entwurf speichern)</span></button>
                 </div>
             </div>

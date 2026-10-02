@@ -2,7 +2,7 @@
             <div class="p-6 sm:p-8 text-center">
                 <h2 class="text-3xl sm:text-4xl font-bold mb-4">Terms of Service</h2>
                 <p class="text-lg opacity-90 mb-2">EduGrade usage agreement</p>
-                <p class="text-sm opacity-70">Last updated: October 2026</p>
+                <p class="text-sm opacity-70">Version 2.0 &middot; Last updated: 2026-10-02</p>
             </div>
         </section>
 
@@ -27,10 +27,10 @@
             </header>
             <section class="pp space-y-3">
                 <ul>
-                    <li>By creating an account, you confirm that you are at least 18&nbsp;years old or have parental/guardian consent.</li>
+                    <li>EduGrade is intended for teachers. By creating an account, you confirm that you are of legal age.</li>
                     <li>You provide accurate, current and complete information during registration.</li>
                     <li>You are responsible for keeping your credentials confidential.</li>
-                    <li>You bear the risks of unauthorised access to your account resulting from your credentials.</li>
+                    <li>You are liable for damage caused by unauthorised access to your account to the extent it results from your culpable breach of the duty to keep your credentials secret.</li>
                 </ul>
             </section>
         </section>
@@ -84,9 +84,11 @@
             <section class="pp space-y-3">
                 <p><strong>Important:</strong> You or your school are the controller for the student data you enter in EduGrade; we process it as a processor.</p>
                 <ul>
-                    <li>Before first use you conclude the <a href="/avv">Data Processing Agreement (DPA)</a> for this.</li>
-                    <li>You need a legal basis for the processing &ndash; at schools usually the statutory duty to assess performance; parental consent is normally not required.</li>
-                    <li>Agree the use with your school management and make sure students and parents are informed (EduGrade can create a data protection notice as a PDF).</li>
+                    <li>Before first use the <a href="/avv">Data Processing Agreement (DPA)</a> is concluded for this, by you or via your school.</li>
+                    <li>Which legal basis applies is determined by your school as controller. Use EduGrade for the school only with the approval of the school management.</li>
+                    <li>Make sure students and parents are informed (EduGrade can create a data protection notice as a PDF).</li>
+                    <li>Do not enter health information, diagnoses or religious belief in notes or logs.</li>
+                    <li>Calculated averages are aids; you alone set the grade.</li>
                     <li>The gradebook is stored encrypted on servers in Germany.</li>
                 </ul>
                 <p>How we process data is described in the <a href="/privacy">Privacy Policy</a>.</p>
@@ -101,13 +103,11 @@
                 </h3>
             </header>
             <section class="pp space-y-3">
-                <p>EduGrade is free and open-source software licensed under the <strong>GNU Affero General Public License v3.0 (AGPL-3.0)</strong>.</p>
                 <ul>
-                    <li>You may use, study and modify the software.</li>
-                    <li>You may share modified versions under the same license.</li>
-                    <li>The source code is available at: <a href="https://github.com/redwolfroot/EduGrade" target="_blank" rel="noopener">GitHub</a>.</li>
-                    <li>You may not make the software proprietary or closed-source.</li>
-                    <li>Commercial use is only permitted in compliance with the AGPL-3.0.</li>
+                    <li>The source code of EduGrade is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) and is available on <a href="https://github.com/redwolfroot/EduGrade" target="_blank" rel="noopener">GitHub</a>.</li>
+                    <li>You may use the software freely, including commercially, and study and modify it.</li>
+                    <li>If you distribute the software or provide a modified version over a network, you must make the source code, including your changes, available under the AGPL-3.0.</li>
+                    <li>The license covers the source code. Use of the service at edugrade.at is governed by these Terms.</li>
                 </ul>
             </section>
         </section>
@@ -123,8 +123,7 @@
                 <ul>
                     <li>We strive for reliable operation but cannot guarantee constant availability.</li>
                     <li>The service may be temporarily unavailable for maintenance or updates.</li>
-                    <li>We reserve the right to modify, suspend or discontinue the service.</li>
-                    <li>We announce planned interruptions and a discontinuation in good time.</li>
+                    <li>We continue to develop EduGrade. The core functions (grades, classes, export) remain in place. We announce a discontinuation of the service at least three months in advance in the app and by email so that you can export your data.</li>
                 </ul>
             </section>
         </section>
@@ -144,6 +143,7 @@
                     <li>You are responsible for backing up your data regularly.</li>
                     <li>We are not responsible for decisions made on the basis of data in EduGrade.</li>
                     <li>EduGrade does not replace your school's official grade records.</li>
+                    <li>Claims under Art.&nbsp;82 GDPR remain unaffected.</li>
                 </ul>
             </section>
         </section>
@@ -164,8 +164,8 @@
                 </ul>
                 <h4>Our rights</h4>
                 <ul>
-                    <li>We may suspend or delete accounts that violate these Terms.</li>
-                    <li>We may delete accounts after 12&nbsp;months of inactivity with prior notice.</li>
+                    <li>We may suspend or delete accounts that violate these Terms after prior notice and with an opportunity to export your data. In case of attacks on the service or other serious violations we may suspend an account immediately.</li>
+                    <li>We delete accounts after 12&nbsp;months of inactivity following three announcements by email.</li>
                 </ul>
             </section>
         </section>
@@ -181,7 +181,7 @@
                 <p>EduGrade uses measures including:</p>
                 <ul>
                     <li><strong>AES-256-GCM encryption</strong> of the gradebook with a key derived from your password</li>
-                    <li><strong>PBKDF2</strong> password hashing with 200,000 iterations and a 32-byte salt</li>
+                    <li><strong>PBKDF2</strong> password hashing with a salt (currently 600,000 iterations for new passwords)</li>
                     <li>Sign-in with a confirmation code by email or paired smartphone</li>
                     <li>Sessions lasting 1&nbsp;hour in the browser or up to 6&nbsp;months in the app</li>
                     <li>CSRF protection, secure cookies and Content Security Policy</li>
@@ -198,7 +198,7 @@
                 </h3>
             </header>
             <section class="pp space-y-3">
-                <p>We may change these Terms. Changes are published on this page with a new date, and significant changes are announced in the app. If you continue to use EduGrade afterwards, the changed Terms apply.</p>
+                <p>We may change these Terms. We announce significant changes at least 30&nbsp;days in advance in the app. They take effect only once you agree to them in the app. If you do not agree, you can export your data and delete your account. Editorial changes without effect on your rights (e.g. typos) are published with a new date.</p>
             </section>
         </section>
 
@@ -210,7 +210,7 @@
                 </h3>
             </header>
             <section class="pp space-y-3">
-                <p>Austrian law applies. Place of jurisdiction is Upper Austria, as far as legally permitted. Mandatory consumer protection provisions remain unaffected.</p>
+                <p>Austrian law applies, excluding its conflict-of-law rules. For consumers, the mandatory places of jurisdiction under § 14 KSchG apply, and mandatory consumer protection provisions of their country of residence remain unaffected.</p>
             </section>
         </section>
 

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="de" data-title-de="AVV bestätigen - EduGrade" data-title-en="Confirm the DPA - EduGrade">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Referrer-Policy" content="strict-origin-when-cross-origin">
+    <title>AVV bestätigen - EduGrade</title>
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v={{ app_version }}">
+    <link rel="manifest" href="/static/manifest.json?v={{ app_version }}">
+    <meta name="theme-color" content="#0B0B0B">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="EduGrade">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v={{ app_version }}">
+    <script src="/static/scripts/resource-guard.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/domain-move.js?v={{ app_version }}"></script>
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <link rel="stylesheet" href="/static/vendor/basecoat.min.css">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}">
+    <link rel="stylesheet" href="/static/css/avocloud-branding.css?v={{ app_version }}">
+    <script src="/static/scripts/legal-lang.js?v={{ app_version }}"></script>
+    <script src="/static/scripts/theme.js?v={{ app_version }}"></script>
+    <style>
+        html,
+        body {
+            overflow: visible !important;
+            overflow-y: scroll !important;
+            height: auto !important;
+            min-height: 100% !important;
+            overscroll-behavior: auto !important;
+        }
+
+        #app {
+            overflow: visible !important;
+        }
+
+        .hero-gradient {
+            background: linear-gradient(135deg, oklch(.3 .1 250) 0%, oklch(.2 .05 280) 100%);
+        }
+
+        .section-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 0.5rem;
+            background: oklch(.3 .1 250);
+            color: white;
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+        .avv-body p, .avv-body li { color: oklch(.708 0 0); }
+        .avv-body ol { list-style: decimal; padding-left: 1.25rem; }
+        .avv-body ul { list-style: disc; padding-left: 1.25rem; }
+        .avv-body li { margin-top: 0.35rem; }
+        .avv-body table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .avv-body th, .avv-body td { text-align: left; padding: 0.5rem; border-bottom: 1px solid oklch(.4 0 0 / .4); vertical-align: top; }
+        .avv-body th { color: inherit; font-weight: 600; }
+        .dpa-steps { list-style: decimal; padding-left: 1.25rem; display: grid; gap: 0.6rem; }
+        .dpa-steps li { color: var(--muted-foreground); }
+        .dpa-steps strong { color: var(--foreground); }
+    </style>
+</head>
+
+<body>
+    <div id="app" class="mx-auto px-4 sm:px-10 lg:px-16 py-6" style="max-width: 60rem;">
+        <header class="flex items-center justify-between gap-2 mb-8">
+            <p class="font-semibold" style="font-family: 'Syne', sans-serif; font-size: 1.1rem;">EduGrade</p>
+            <div class="legal-lang-switch" role="group" aria-label="Language"><button type="button" data-set-lang="de">DE</button><button type="button" data-set-lang="en">EN</button></div>
+        </header>
+
+{% if not valid %}
+        <section class="card mb-6">
+            <header class="mb-2"><h2 class="text-2xl font-bold"><span data-lang-inline="de">Link ungültig oder abgelaufen</span><span data-lang-inline="en">Link invalid or expired</span></h2></header>
+            <p><span data-lang-inline="de">Dieser Bestätigungslink kann nicht mehr verwendet werden. Bitte die Lehrkraft bzw. den Inhaber der Organisation, einen neuen Link zu senden.</span><span data-lang-inline="en">This confirmation link can no longer be used. Please ask the teacher or the organisation owner to send a new link.</span></p>
+        </section>
+{% else %}
+        <section class="card hero-gradient text-white mb-8">
+            <div class="p-6 sm:p-8 text-center">
+                <h2 class="text-2xl sm:text-4xl font-bold mb-4" style="hyphens: manual; overflow-wrap: anywhere;"><span data-lang-inline="de">Auftrags&shy;verarbeitungs&shy;vertrag bestätigen</span><span data-lang-inline="en">Confirm the Data Processing Agreement</span></h2>
+                <p class="text-lg opacity-90">
+                    <span data-lang-inline="de">{{ signer }} bittet um Ihre Bestätigung für die Schule {{ school }}{% if kind == 'org' %} (alle Lehrkräfte der Organisation){% endif %}.</span>
+                    <span data-lang-inline="en">{{ signer }} asks for your confirmation for the school {{ school }}{% if kind == 'org' %} (all teachers of the organisation){% endif %}.</span>
+                </p>
+                <p class="text-sm opacity-70 mt-2">Version {{ dpa_version }}</p>
+            </div>
+        </section>
+
+        <h3 class="text-2xl font-bold mt-10 mb-4"><span data-lang-inline="de">Vertragstext</span><span data-lang-inline="en">Agreement</span></h3>
+        <div data-lang-block="de">
+{% include '_dpa_content.html' %}
+        </div>
+        <div data-lang-block="en">
+{% include '_dpa_content_en.html' %}
+        </div>
+
+        <section id="dpa-confirm-card" class="card mb-6 border-2 border-blue-500/30">
+            <header class="mb-4"><h3 class="text-xl font-semibold"><span data-lang-inline="de">Bestätigen</span><span data-lang-inline="en">Confirm</span></h3></header>
+            <form id="dpa-confirm-form" class="form grid gap-4">
+                <div class="grid gap-2">
+                    <label for="dpa-c-name"><span data-lang-inline="de">Vor- und Nachname</span><span data-lang-inline="en">First and last name</span></label>
+                    <input type="text" id="dpa-c-name" class="input w-full" required minlength="3" maxlength="100" autocomplete="name">
+                </div>
+                <div class="grid gap-2">
+                    <label for="dpa-c-role"><span data-lang-inline="de">Funktion</span><span data-lang-inline="en">Role</span></label>
+                    <select id="dpa-c-role" class="input w-full">
+                        <option value="principal">Schulleiter/in &middot; Head of school</option>
+                        <option value="delegated">Bevollmächtigt durch die Schulleitung &middot; Authorised by the school management</option>
+                    </select>
+                </div>
+                <div class="grid gap-2">
+                    <label for="dpa-c-school"><span data-lang-inline="de">Schule</span><span data-lang-inline="en">School</span></label>
+                    <input type="text" id="dpa-c-school" class="input w-full" required minlength="2" maxlength="120" value="{{ school }}">
+                </div>
+                <label class="flex items-start gap-2">
+                    <input type="checkbox" id="dpa-c-accept" class="mt-1" required>
+                    <span class="text-sm"><span data-lang-inline="de">Ich habe den Auftragsverarbeitungsvertrag (Version {{ dpa_version }}) gelesen und schließe ihn für die Schule verbindlich ab. Ich bin Schulleiter/in oder dazu bevollmächtigt.</span><span data-lang-inline="en">I have read the Data Processing Agreement (version {{ dpa_version }}) and conclude it bindingly for the school. I am the head of school or authorised to do so. The German version is legally binding.</span></span>
+                </label>
+                <p id="dpa-c-error" class="text-sm text-red-500 hidden"><span data-lang-inline="de">Bestätigung fehlgeschlagen. Bitte versuchen Sie es erneut.</span><span data-lang-inline="en">Confirmation failed. Please try again.</span></p>
+                <button type="submit" id="dpa-c-submit" class="btn-primary is-cta w-full"><span data-lang-inline="de">Verbindlich bestätigen</span><span data-lang-inline="en">Confirm bindingly</span></button>
+                <p class="text-xs" style="color: var(--muted-foreground);"><span data-lang-inline="de">Gespeichert werden Name, Funktion, Schule, Zeitpunkt und Vertragsversion. Die E-Mail-Adresse, an die der Link ging, wird gelöscht. Dies ist keine sichere Identitätsprüfung. Mehr dazu in der <a href="/privacy" target="_blank" class="text-blue-400 hover:underline">Datenschutzerklärung</a>.</span><span data-lang-inline="en">We store name, role, school, time and contract version. The e-mail address the link was sent to is deleted. This is not a reliable identity check. See the <a href="/privacy" target="_blank" class="text-blue-400 hover:underline">privacy policy</a>.</span></p>
+            </form>
+        </section>
+        <section id="dpa-c-done" class="card mb-6 hidden">
+            <h3 class="text-xl font-semibold"><span data-lang-inline="de">Danke, der Vertrag ist bestätigt.</span><span data-lang-inline="en">Thank you, the agreement is confirmed.</span></h3>
+        </section>
+{% endif %}
+    </div>
+
+{% include '_legal_footer.html' %}
+    <script src="/static/scripts/avocloud-logo.js"></script>
+{% if valid %}
+    <script>
+    (() => {
+        const form = document.getElementById('dpa-confirm-form');
+        const err = document.getElementById('dpa-c-error');
+        const btn = document.getElementById('dpa-c-submit');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            err.classList.add('hidden');
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/dpa/confirm/{{ token }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({
+                        name: document.getElementById('dpa-c-name').value,
+                        role: document.getElementById('dpa-c-role').value,
+                        school: document.getElementById('dpa-c-school').value,
+                        accepted: document.getElementById('dpa-c-accept').checked
+                    })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (data.success) {
+                    document.getElementById('dpa-confirm-card').classList.add('hidden');
+                    document.getElementById('dpa-c-done').classList.remove('hidden');
+                    return;
+                }
+            } catch (_) { /* fall through */ }
+            err.classList.remove('hidden');
+            btn.disabled = false;
+        });
+    })();
+    </script>
+{% endif %}
+</body>
+
+</html>

@@ -36,3 +36,7 @@ Das Verhaltensprotokoll ist nur für Sie sichtbar. Es wird **nicht** über den [
 :::note Hinweis
 Wenn Sie ein Fach löschen, werden auch alle Verhaltenseinträge dieses Fachs gelöscht. Beim Anlegen eines neuen Schuljahres werden keine Einträge übernommen.
 :::
+
+## Datenschutz
+
+Tragen Sie in Beschreibungen und Notizen bitte keine Gesundheitsangaben, Diagnosen oder Angaben zur Religion ein. Das gilt auch für Schülernotizen, Anwesenheitsnotizen und Notenkommentare. Solche besonderen Kategorien personenbezogener Daten (Art. 9 DSGVO) dürfen in EduGrade nicht erfasst werden.

@@ -22,7 +22,7 @@ FROM python:3.12-slim
 
 # Create non-root user for security
 RUN useradd -m -u 1000 edugrade && \
-    mkdir -p /app/data && \
+    mkdir -p /app/data /app/backups && \
     chown -R edugrade:edugrade /app
 
 # Copy virtual environment from builder

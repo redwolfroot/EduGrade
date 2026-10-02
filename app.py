@@ -24,6 +24,7 @@ JSON-based database implementation
 import json
 import html
 import hashlib
+import re
 import secrets
 import functools
 import base64
@@ -37,6 +38,8 @@ import db as db_layer
 import docs_render
 import webuntis_client
 import moodle_client
+import backup as backup_job
+import inactivity
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -135,6 +138,7 @@ RATE_LIMITS = {
     'password_reset': (3, 300), # 3 attempts per 5 minutes
     'org_join': (5, 60),        # 5 join-code attempts per minute (brute-force resistance)
     'org_manage': (20, 60),     # 20 org management requests per minute
+    'dpa_confirm': (10, 60),    # 10 DPA confirmation-link attempts per minute (token is 256-bit)
     'webuntis_connect': (5, 60),  # 5 WebUntis login attempts per minute (brute-force resistance)
     'moodle_connect': (5, 60),    # 5 Moodle connect attempts per minute (brute-force resistance)
     'default': (100, 60),       # 100 requests per minute default
@@ -613,6 +617,48 @@ async def send_verify_email(to_addr: str, username: str, code: str):
         f"willkommen bei EduGrade! Gib diesen Code ein, um deine E-Mail-Adresse zu bestätigen.\n"
         f"Der Code ist {minutes} Minuten gültig.\n"
         f"Hast du dich nicht registriert? Dann ignoriere diese E-Mail."
+    )
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
+
+
+async def send_inactivity_warning_email(to_addr: str, username: str, stage: int, days_left: int, delete_at: datetime):
+    """Warning before an inactive account is deleted (stage 1..3 = 30/7/1 days).
+    The UI language lives in the encrypted gradebook, so the mail is bilingual."""
+    app_url = APP_CONFIG.get('app_url', 'http://localhost:5000').rstrip('/')
+    name = html.escape(username or '')
+    date_de = delete_at.strftime('%d.%m.%Y')
+    date_en = delete_at.strftime('%Y-%m-%d')
+    days_de = "1 Tag" if days_left == 1 else f"{days_left} Tagen"
+    days_en = "1 day" if days_left == 1 else f"{days_left} days"
+    subject = f"EduGrade – Dein Konto wird in {days_de} gelöscht / Your account will be deleted in {days_en}"
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem;">
+        <h2 style="margin-bottom: 0.5rem;">Dein Konto wird in {days_de} gelöscht</h2>
+        <p>Hallo {name},</p>
+        <p>du hast EduGrade seit fast zwölf Monaten nicht mehr genutzt. Inaktive Konten werden gelöscht: Am <strong>{date_de}</strong> werden dein Konto und alle Daten (Klassen, Schüler, Noten) unwiderruflich entfernt.</p>
+        <p><strong>Melde dich einfach an, um dein Konto zu behalten.</strong> <a href="{app_url}/login">{app_url}/login</a></p>
+        <p style="color:#888;font-size:0.875rem;">Möchtest du deine Daten sichern? Nutze nach der Anmeldung den Export.</p>
+        <hr style="border:none;border-top:1px solid #333;margin:1.5rem 0;">
+        <h2 style="margin-bottom: 0.5rem;">Your account will be deleted in {days_en}</h2>
+        <p>Hello {name},</p>
+        <p>You have not used EduGrade for almost twelve months. Inactive accounts are deleted: on <strong>{date_en}</strong> your account and all its data (classes, students, grades) will be permanently removed.</p>
+        <p><strong>Simply sign in to keep your account.</strong> <a href="{app_url}/login">{app_url}/login</a></p>
+        <p style="color:#888;font-size:0.875rem;">Want to keep a copy of your data? Use the export after signing in.</p>
+        <hr style="border:none;border-top:1px solid #333;margin:1.5rem 0;">
+        <p style="color:#888;font-size:0.75rem;">EduGrade &mdash; <a href="{app_url}">{app_url}</a></p>
+    </div>
+    """
+    text_body = (
+        f"Hallo {username},\n\n"
+        f"du hast EduGrade seit fast zwölf Monaten nicht mehr genutzt. Am {date_de} werden dein Konto und alle Daten "
+        f"(Klassen, Schüler, Noten) unwiderruflich gelöscht.\n"
+        f"Melde dich an, um dein Konto zu behalten: {app_url}/login\n\n"
+        f"---\n\n"
+        f"Hello {username},\n\n"
+        f"You have not used EduGrade for almost twelve months. On {date_en} your account and all its data "
+        f"(classes, students, grades) will be permanently deleted.\n"
+        f"Sign in to keep your account: {app_url}/login"
     )
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
@@ -1283,6 +1329,8 @@ def build_handover_snapshot(cls: dict, categories: list, include: dict) -> dict:
 def init_db():
     """Initialize SQLite schema via db.py."""
     db_layer.init_schema()
+    # Idempotent: archive DPA signatures already stored in the user documents.
+    db_layer.migrate_dpa_signatures_from_users()
 
 
 def migrate_plaintext_shares():
@@ -1360,6 +1408,9 @@ async def cleanup_expired_sessions():
     # Clean up expired (unaccepted) class handovers
     db_layer.delete_expired_handovers(now_iso)
 
+    # DPA: expired confirmation links, signature proofs older than 3 years
+    cleanup_dpa_records()
+
     return None
 
 CLEANUP_INTERVAL_SECONDS = 60
@@ -1374,6 +1425,74 @@ async def _periodic_cleanup():
             await cleanup_expired_sessions()
         except Exception:
             logger.exception("Periodic cleanup failed")
+        try:
+            await run_daily_jobs()
+        except Exception:
+            logger.exception("Daily jobs failed")
+
+
+# ---- daily jobs (inactive-account deletion, database backup) ----
+_daily_jobs_day = None  # UTC date string of the last completed run
+OPERATOR_EMAIL = os.environ.get('OPERATOR_EMAIL') or APP_CONFIG.get('operator_email') or 'fabian.murauer@avocloud.net'
+
+
+async def _delete_inactive_account(user: dict) -> None:
+    """Same path as DELETE /api/account (db.delete_account also keeps the DPA
+    evidence); raises ValueError for an org admin with other members."""
+    tokens = db_layer.delete_account(user['email'])
+    for tok in tokens:
+        clear_session_cache(tok)
+    _terminate_user_sessions(user['id'])
+
+
+async def _send_inactivity_warning(user: dict, stage: int, days_left: int, delete_at: datetime) -> None:
+    await send_inactivity_warning_email(user['email'], user.get('username', ''), stage, days_left, delete_at)
+
+
+async def _notify_operator_inactive_org_admin(user: dict) -> None:
+    """Tell the operator an inactive org admin could not be auto-deleted."""
+    if not smtp_is_configured():
+        return
+    subject = "EduGrade: inaktiver Org-Admin nicht gelöscht"
+    body = (f"Das Konto {user['id']} ist seit über 12 Monaten inaktiv und wurde nach den Warnungen "
+            f"nicht gelöscht, weil es Admin einer Organisation mit weiteren Mitgliedern ist. "
+            f"Bitte Admin-Rolle übertragen oder manuell entscheiden.")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_email_sync, OPERATOR_EMAIL, subject, f"<p>{html.escape(body)}</p>", body)
+
+
+async def run_daily_jobs(now: datetime | None = None, force: bool = False) -> None:
+    """Once per UTC day (first cleanup tick after midnight or after a restart;
+    the jobs themselves are idempotent): inactivity deletion and DB backup."""
+    global _daily_jobs_day
+    now = now or datetime.now(timezone.utc)
+    today = now.strftime('%Y-%m-%d')
+    if _daily_jobs_day == today and not force:
+        return
+    _daily_jobs_day = today
+    if smtp_is_configured():
+        await inactivity.run_inactivity_job(_send_inactivity_warning, _delete_inactive_account,
+                                            _notify_operator_inactive_org_admin, now)
+    else:
+        # Never delete without being able to warn.
+        logger.warning("SMTP not configured - inactive-account deletion skipped")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, backup_job.run_daily_backup, now)
+
+
+# Last day a user's activity was written, so the DB sees at most one write a day.
+_last_active_touched: dict[str, str] = {}
+
+
+def touch_last_active(user_id: str, force: bool = False) -> None:
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    if not force and _last_active_touched.get(user_id) == today:
+        return
+    try:
+        db_layer.touch_last_active(user_id, datetime.now(timezone.utc).isoformat())
+        _last_active_touched[user_id] = today
+    except Exception as e:
+        logger.warning("Could not update last_active_at for user %s: %s", user_id, type(e).__name__)
 
 
 # ============ V2 SCHEMA HELPERS ============
@@ -1806,7 +1925,11 @@ def register_user(username: str, email: str, password: str, account_type: str = 
         "account_type": account_type,
         # Without mail there's no way to confirm, so self-hosted setups skip it.
         "email_verified": not smtp_is_configured(),
-        "created_at": datetime.now().isoformat()
+        "created_at": datetime.now().isoformat(),
+        # Registration requires ticking the terms checkbox, so consent to the
+        # current version is recorded right away.
+        "terms_version": TERMS_VERSION,
+        "terms_accepted_at": datetime.now(timezone.utc).isoformat(),
     })
 
     # Initialize user data (will be encrypted)
@@ -2060,6 +2183,7 @@ def finish_login(user: dict, encryption_key: bytes, long_session: bool, force: b
             logger.info("Force-login for user %s terminated %d existing session(s)", user_id, removed)
 
     token = _create_session(user_id, encryption_key, long_session)
+    touch_last_active(user_id, force=True)  # also resets inactivity warnings
 
     # Migrate to v2 split layout if still on legacy single-blob v1
     # (handles both encrypted and plaintext v1 records; migrate_user_to_v2
@@ -2280,6 +2404,9 @@ def get_user_from_token(token: str) -> dict | None:
             'account_type': user_info.get('account_type', 'teacher'),
             'school': user_info.get('school', ''),
             'dpa_version': user_info.get('dpa_version'),
+            'dpa_basis': user_info.get('dpa_basis'),
+            'dpa_org_id': user_info.get('dpa_org_id'),
+            'terms_version': user_info.get('terms_version'),
         }
     return None
 
@@ -2308,10 +2435,17 @@ def login_required(f):
         if not user:
             return jsonify({'error': 'Authentication required'}), 401
 
+        touch_last_active(user['id'])  # at most one DB write per user and day
+
         # The whole API stays locked until the DPA is signed (see /avv/sign),
         # except the few calls the signing step and the login itself need.
         if needs_dpa_signature(user) and not _dpa_exempt(request.path, request.method):
             return jsonify({'success': False, 'message': 'backend.dpaRequired', 'dpa_required': True}), 403
+
+        # After the DPA (so the user signs that first), changed terms lock all
+        # write calls until accepted in the in-app modal. Reads and export stay open.
+        if needs_terms_acceptance(user) and not _terms_exempt(request.path, request.method):
+            return jsonify({'success': False, 'message': 'backend.termsRequired', 'terms_required': True}), 403
 
         # Add user to request context
         request.user = user # type: ignore
@@ -2368,7 +2502,7 @@ APP_VERSION, BUILD_DATE = load_version()
 # Version of the data processing agreement (/avv). Every account has to sign
 # it once (/avv/sign) before using the app; bumping the version makes
 # everyone sign again, so only do that when the text changes materially.
-DPA_VERSION = '1.0'
+DPA_VERSION = '1.1'
 DPA_SIGNER_NAME_MAX = 100
 
 
@@ -2378,7 +2512,7 @@ DPA_SIGNER_NAME_MAX = 100
 # the phone-code login flow (the paired phone has to hand out the code before
 # the account can even reach the signing page).
 _DPA_EXEMPT_PATHS = (
-    '/api/dpa/accept', '/api/heartbeat', '/api/disconnect',
+    '/api/dpa/accept', '/api/dpa/status', '/api/dpa/resend', '/api/heartbeat', '/api/disconnect',
     '/api/announcement', '/api/schools', '/api/profile/school',
     '/api/device/status', '/api/device/login-requests',
 )
@@ -2400,9 +2534,55 @@ def _dpa_exempt(path: str, method: str) -> bool:
     return path.startswith(_DPA_EXEMPT_PATHS)
 
 
+def _org_dpa_confirmed(org_id: str) -> bool:
+    """True if the school-level DPA of *org_id* is signed for the current version.
+    Orgs without a row (all pre-existing ones) or with an old version are 'pending'."""
+    row = db_layer.get_org_dpa(org_id)
+    return bool(row and row.get('version') == DPA_VERSION)
+
+
 def needs_dpa_signature(user: dict) -> bool:
-    """True if *user* (from get_user_from_token) hasn't signed the current DPA."""
-    return user.get('dpa_version') != DPA_VERSION
+    """True if *user* (from get_user_from_token) hasn't signed the current DPA.
+
+    A signature on the 'org' basis only counts while the user is still an
+    approved member of that org and the org's school DPA is confirmed; leaving
+    or being removed sends the user back to the signing page."""
+    if user.get('dpa_version') != DPA_VERSION:
+        return True
+    if user.get('dpa_basis') == 'org':
+        m = db_layer.get_org_membership(user.get('id'))
+        return not (m and m.get('status') == 'approved'
+                    and m.get('org_id') == user.get('dpa_org_id')
+                    and _org_dpa_confirmed(m['org_id']))
+    return False
+
+
+# Version of the terms of service (/terms). Material changes need active
+# consent: bumping the version shows every account the in-app consent modal
+# and locks write calls until it is accepted. Accounts without a stored
+# terms_version (created before this existed) see the modal once.
+TERMS_VERSION = '2.0'
+
+# Write calls allowed while the terms are not accepted yet: the accept call,
+# the way out (account deletion), session housekeeping, the announcement
+# banner and the phone-code login flow. Reading (GET) and exporting stay open.
+_TERMS_EXEMPT_PATHS = (
+    '/api/terms/accept', '/api/heartbeat', '/api/disconnect',
+    '/api/announcement', '/api/device/status', '/api/device/login-requests',
+)
+
+
+def needs_terms_acceptance(user: dict) -> bool:
+    """True if *user* hasn't accepted the current terms of service."""
+    return user.get('terms_version') != TERMS_VERSION
+
+
+def _terms_exempt(path: str, method: str) -> bool:
+    if method in ('GET', 'HEAD', 'OPTIONS'):
+        return True
+    if path == '/api/account' and method == 'DELETE':
+        return True
+    return path.startswith(_TERMS_EXEMPT_PATHS)
 VERSION_STRING = f"v{APP_VERSION} ({BUILD_DATE})" if BUILD_DATE else f"v{APP_VERSION}"
 
 app = Quart(__name__,
@@ -2565,7 +2745,8 @@ async def index():
     if needs_dpa_signature(user):
         return redirect(url_for('dpa_sign_page'))
 
-    return await render_template('index.html', user=user, app_version=APP_VERSION, version_string=VERSION_STRING, build_date=BUILD_DATE)
+    return await render_template('index.html', user=user, app_version=APP_VERSION, version_string=VERSION_STRING, build_date=BUILD_DATE,
+                                 terms_required=needs_terms_acceptance(user), terms_version=TERMS_VERSION)
 
 
 @app.route('/login')
@@ -2588,6 +2769,12 @@ async def login_page():
 async def terms():
     return await render_template('terms.html', app_version=APP_VERSION)
 
+@app.route('/impressum')
+async def impressum():
+    """Legal notice lives on avocloud.net and also covers edugrade.at."""
+    return redirect('https://avocloud.net/impressum/', code=302)
+
+
 @app.route('/privacy')
 async def privacy():
     return await render_template('privacy.html', app_version=APP_VERSION)
@@ -2596,6 +2783,118 @@ async def privacy():
 @app.route('/dpa')
 async def dpa():
     return await render_template('dpa.html', app_version=APP_VERSION, dpa_version=DPA_VERSION)
+
+
+# --- DPA signing: three paths (see LEGAL_FIXES.md A1) -------------------------
+# dpa_basis on the user document / in dpa_signatures:
+#   org              signed via the school's org (org DPA confirmed by principal)
+#   school_pending   signed personally, principal asked to confirm via link
+#   school_confirmed ... and the principal has confirmed
+#   personal         signed on own responsibility
+DPA_CONFIRM_TTL_DAYS = 14
+DPA_CONFIRM_ROLES = ('principal', 'delegated')
+DPA_ROLE_MAX = 100
+DPA_RETENTION_DAYS = 3 * 365 + 1  # proof kept 3 years after the contract ended
+_EMAIL_RE = re.compile(r'^[^@\s]{1,64}@[^@\s]{1,253}\.[^@\s.]{2,}$')
+
+
+def _dpa_lang(value) -> str:
+    return 'en' if value == 'en' else 'de'
+
+
+def _dpa_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _dpa_confirm_link(token: str) -> str:
+    app_url = APP_CONFIG.get('app_url', 'http://localhost:5000').rstrip('/')
+    return f"{app_url}/avv/confirm/{token}"
+
+
+async def send_dpa_confirmation_email(to_addr: str, signer_name: str, school: str,
+                                      link: str, kind: str, lang: str = 'de'):
+    """Ask a school principal to confirm the DPA (best-effort template, de/en).
+    kind 'org' = for the whole organisation, 'personal' = for one teacher."""
+    app_url = APP_CONFIG.get('app_url', 'http://localhost:5000').rstrip('/')
+    n, sch = html.escape(signer_name), html.escape(school or '')
+    lk = html.escape(link, quote=True)
+    if lang == 'en':
+        subject = f"EduGrade – please confirm the data processing agreement for {school}"
+        scope = ("for all teachers of the organisation" if kind == 'org'
+                 else "for this teacher")
+        intro = (f"{signer_name} uses EduGrade for the school {school} and asks you, as head of school "
+                 f"or authorised person, to confirm the data processing agreement (DPA) {scope}.")
+        body_html = f"""
+        <h2 style="margin-bottom:0.5rem;">Confirm the data processing agreement</h2>
+        <p><strong>{n}</strong> uses EduGrade for <strong>{sch}</strong> and asks you, as head of school or
+        authorised person, to confirm the data processing agreement (DPA) {scope}.</p>
+        <p>You can read the full agreement on the confirmation page. Until you confirm, the agreement
+        applies to the teacher personally.</p>
+        <p><a href="{lk}" style="display:inline-block;padding:0.6rem 1.2rem;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Read and confirm the agreement</a></p>
+        <p style="color:#888;font-size:0.8rem;">The link is valid for {DPA_CONFIRM_TTL_DAYS} days and can be used once.
+        If you do not know this person, ignore this e-mail. Privacy information: {app_url}/privacy</p>"""
+        text_body = (f"{intro}\n\nYou can read and confirm the agreement here "
+                     f"(valid {DPA_CONFIRM_TTL_DAYS} days, single use):\n{link}\n\n"
+                     "Until you confirm, the agreement applies to the teacher personally. "
+                     "If you do not know this person, ignore this e-mail.")
+    else:
+        subject = f"EduGrade – bitte Auftragsverarbeitungsvertrag für {school} bestätigen"
+        scope = ("für alle Lehrkräfte der Organisation" if kind == 'org'
+                 else "für diese Lehrkraft")
+        intro = (f"{signer_name} nutzt EduGrade für die Schule {school} und bittet Sie als Schulleitung "
+                 f"oder bevollmächtigte Person, den Auftragsverarbeitungsvertrag (AVV) {scope} zu bestätigen.")
+        body_html = f"""
+        <h2 style="margin-bottom:0.5rem;">Auftragsverarbeitungsvertrag bestätigen</h2>
+        <p><strong>{n}</strong> nutzt EduGrade für die Schule <strong>{sch}</strong> und bittet Sie als
+        Schulleitung oder bevollmächtigte Person, den Auftragsverarbeitungsvertrag (AVV) {scope} zu bestätigen.</p>
+        <p>Den vollständigen Vertrag können Sie auf der Bestätigungsseite lesen. Bis zu Ihrer Bestätigung
+        gilt der Vertrag mit der Lehrkraft persönlich.</p>
+        <p><a href="{lk}" style="display:inline-block;padding:0.6rem 1.2rem;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Vertrag lesen und bestätigen</a></p>
+        <p style="color:#888;font-size:0.8rem;">Der Link ist {DPA_CONFIRM_TTL_DAYS} Tage gültig und nur einmal verwendbar.
+        Kennen Sie diese Person nicht, ignorieren Sie diese E-Mail. Datenschutzhinweise: {app_url}/privacy</p>"""
+        text_body = (f"{intro}\n\nDen Vertrag können Sie hier lesen und bestätigen "
+                     f"({DPA_CONFIRM_TTL_DAYS} Tage gültig, einmal verwendbar):\n{link}\n\n"
+                     "Bis zu Ihrer Bestätigung gilt der Vertrag mit der Lehrkraft persönlich. "
+                     "Kennen Sie diese Person nicht, ignorieren Sie diese E-Mail.")
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem;">
+        {body_html}
+        <hr style="border:none;border-top:1px solid #333;margin:1.5rem 0;">
+        <p style="color:#888;font-size:0.75rem;">EduGrade &mdash; <a href="{app_url}">{app_url}</a></p>
+    </div>
+    """
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_email_sync, to_addr, subject, html_body, text_body)
+
+
+def _new_dpa_confirmation(kind: str, user_id: str, org_id: str | None, email: str) -> str:
+    """Create a one-time confirmation link row (hash only) and return the raw token."""
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    db_layer.put_dpa_confirmation(
+        _dpa_token_hash(token), kind, user_id, org_id, DPA_VERSION, email,
+        now.isoformat(), (now + timedelta(days=DPA_CONFIRM_TTL_DAYS)).isoformat())
+    return token
+
+
+def _valid_confirmation(token: str) -> dict | None:
+    """The open, unexpired confirmation row for *token* (current DPA version), or None."""
+    row = db_layer.get_dpa_confirmation(_dpa_token_hash(token or ''))
+    if not row or row['version'] != DPA_VERSION:
+        return None
+    if datetime.fromisoformat(row['expires_at']) < datetime.now(timezone.utc):
+        return None
+    return row
+
+
+def _dpa_org_context(user_id: str) -> dict:
+    """What the signing form needs to know about the user's org (if any)."""
+    m = db_layer.get_org_membership(user_id)
+    org = db_layer.get_org(m['org_id']) if m and m.get('status') == 'approved' else None
+    if not org:
+        return {'org': None, 'org_confirmed': False, 'is_admin': False}
+    return {'org': org, 'org_confirmed': _org_dpa_confirmed(org['id']),
+            'is_admin': m.get('role') == 'admin'}
 
 
 @app.route('/avv/sign')
@@ -2611,18 +2910,31 @@ async def dpa_sign_page():
         stored['dpa_shown_version'] = DPA_VERSION
         stored['dpa_shown_at'] = datetime.now(timezone.utc).isoformat()
         db_layer.put_user(stored['email'], stored)
+    ctx = _dpa_org_context(user['id'])
     return await render_template('dpa_sign.html', app_version=APP_VERSION, dpa_version=DPA_VERSION,
-                                 user=user, resign=bool(user.get('dpa_version')))
+                                 user=user, resign=bool(user.get('dpa_version')),
+                                 org_name=ctx['org']['name'] if ctx['org'] else '',
+                                 org_available=bool(ctx['org'] and ctx['org_confirmed']),
+                                 org_principal_option=bool(ctx['org'] and ctx['is_admin'] and not ctx['org_confirmed']),
+                                 mail_available=smtp_is_configured())
 
 
 @app.route('/api/dpa/accept', methods=['POST'])
 @login_required
 async def api_dpa_accept():
-    """Record the electronic signature of the DPA (Art. 28(9) GDPR)."""
+    """Record the electronic signature of the DPA (Art. 28(9) GDPR).
+
+    ``choice`` selects the path: ``org`` (via the school's org), ``school``
+    (own signature, principal confirms via link), ``personal`` (own
+    responsibility) or ``org_principal`` (an org admin who is the principal or
+    authorised signs for the whole org)."""
     data = await request.get_json() or {}
     name = ' '.join(str(data.get('name') or '').split())[:DPA_SIGNER_NAME_MAX]
     school = _normalize_school(data.get('school'))
-    if len(name) < 3 or data.get('accepted') is not True or data.get('version') != DPA_VERSION:
+    choice = data.get('choice')
+    lang = _dpa_lang(data.get('lang'))
+    if (len(name) < 3 or data.get('accepted') is not True or data.get('version') != DPA_VERSION
+            or choice not in ('org', 'school', 'personal', 'org_principal')):
         return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
 
     user = db_layer.get_user_by_email(request.user['email'])  # type: ignore
@@ -2643,6 +2955,54 @@ async def api_dpa_accept():
     if shown_at is None or (now - shown_at).total_seconds() < DPA_MIN_READ_SECONDS:
         return jsonify({'success': False, 'message': 'backend.dpaTooFast'}), 400
 
+    ctx = _dpa_org_context(user['id'])
+    org = ctx['org']
+    basis, org_id = choice, None
+    confirmed_by = (None, None, None)
+    send = None  # (kind, org_id, email) when a confirmation link has to go out
+
+    if choice == 'org':
+        if not (org and ctx['org_confirmed']):
+            return jsonify({'success': False, 'message': 'backend.dpaOrgNotConfirmed'}), 400
+        basis, org_id = 'org', org['id']
+        school = school or org.get('name', '')
+    elif choice == 'org_principal':
+        role = data.get('role')
+        if not (org and ctx['is_admin']) or role not in DPA_CONFIRM_ROLES:
+            return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+        school = school or org['name']
+        basis, org_id = 'org', org['id']
+        confirmed_by = (name, role, now.isoformat())
+    elif choice == 'school':
+        email = str(data.get('principal_email') or '').strip()[:254]
+        if (not _EMAIL_RE.match(email) or data.get('school_ack') is not True
+                or len(school) < 2 or email.lower() == user['email'].lower()):
+            return jsonify({'success': False, 'message': 'backend.dpaPrincipalInvalid'}), 400
+        if not smtp_is_configured():
+            return jsonify({'success': False, 'message': 'backend.dpaMailNotConfigured'}), 400
+        basis = 'school_pending'
+        if org and ctx['is_admin'] and not ctx['org_confirmed']:
+            send = ('org', org['id'], email)
+            org_id = org['id']
+        else:
+            send = ('personal', None, email)
+    else:
+        if data.get('personal_ack') is not True:
+            return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+        basis = 'personal'
+
+    token = None
+    if send:
+        # Send first, persist only on success: a failed mail must not leave a
+        # signature that nobody can ever confirm.
+        token = secrets.token_urlsafe(32)
+        try:
+            await send_dpa_confirmation_email(send[2], name, school, _dpa_confirm_link(token),
+                                              send[0], lang)
+        except Exception as e:
+            logger.warning("Failed to send DPA confirmation mail: %s", type(e).__name__)
+            return jsonify({'success': False, 'message': 'backend.dpaMailFailed'}), 502
+
     # Keep earlier signatures instead of overwriting them.
     if user.get('dpa_version'):
         user.setdefault('dpa_history', []).append({
@@ -2651,15 +3011,213 @@ async def api_dpa_accept():
             'signer_name': user.get('dpa_signer_name'),
             'signer_school': user.get('dpa_signer_school'),
             'text_sha256': user.get('dpa_text_sha256'),
+            'basis': user.get('dpa_basis'),
+            'org_id': user.get('dpa_org_id'),
         })
+    text_hash = _dpa_text_hash()
     user['dpa_version'] = DPA_VERSION
     user['dpa_accepted_at'] = now.isoformat()  # UTC, offset included
-    user['dpa_text_sha256'] = _dpa_text_hash()
+    user['dpa_text_sha256'] = text_hash
     user['dpa_signer_name'] = name
     user['dpa_signer_school'] = school
+    user['dpa_basis'] = basis
+    if org_id:
+        user['dpa_org_id'] = org_id
+    else:
+        user.pop('dpa_org_id', None)
     db_layer.put_user(user['email'], user)
-    logger.info("DPA %s signed by user %s", DPA_VERSION, user['id'])
+    db_layer.add_dpa_signature(
+        user['id'], DPA_VERSION, now.isoformat(), name, school, basis, text_hash,
+        org_id=org_id, confirmed_by_name=confirmed_by[0], confirmed_by_role=confirmed_by[1],
+        confirmed_at=confirmed_by[2])
+    if choice == 'org_principal':
+        db_layer.set_org_dpa(org_id, DPA_VERSION, school, name, confirmed_by[1],
+                             now.isoformat(), text_hash)
+    if send:
+        now_c = datetime.now(timezone.utc)
+        db_layer.put_dpa_confirmation(
+            _dpa_token_hash(token), send[0], user['id'], send[1], DPA_VERSION, send[2],
+            now_c.isoformat(), (now_c + timedelta(days=DPA_CONFIRM_TTL_DAYS)).isoformat())
+    logger.info("DPA %s signed by user %s (%s)", DPA_VERSION, user['id'], basis)
+    return jsonify({'success': True, 'basis': basis})
+
+
+@app.route('/api/dpa/status', methods=['GET'])
+@login_required
+async def api_dpa_status():
+    """The caller's DPA basis and whether a principal confirmation is open."""
+    user = db_layer.get_user_by_id(request.user['id'])  # type: ignore
+    ctx = _dpa_org_context(request.user['id'])  # type: ignore
+    kind = 'org' if (ctx['org'] and ctx['is_admin']) else 'personal'
+    pending = db_layer.get_dpa_confirmation_for(request.user['id'], kind) if user else None  # type: ignore
+    return jsonify({
+        'success': True,
+        'basis': (user or {}).get('dpa_basis'),
+        'version': (user or {}).get('dpa_version'),
+        'confirmation_open': bool(pending and _valid_confirmation_row_ok(pending)),
+        'org': ({'id': ctx['org']['id'], 'name': ctx['org']['name'],
+                 'dpa_confirmed': ctx['org_confirmed'], 'is_admin': ctx['is_admin']}
+                if ctx['org'] else None),
+    })
+
+
+def _valid_confirmation_row_ok(row: dict) -> bool:
+    return (row['version'] == DPA_VERSION
+            and datetime.fromisoformat(row['expires_at']) >= datetime.now(timezone.utc))
+
+
+@app.route('/api/dpa/resend', methods=['POST'])
+@rate_limit('org_manage')
+@login_required
+async def api_dpa_resend():
+    """Send the principal confirmation link again (e.g. after it expired).
+    Only for a signature that is still on the school_pending basis."""
+    data = await request.get_json() or {}
+    user_id = request.user['id']  # type: ignore
+    user = db_layer.get_user_by_id(user_id)
+    if not user or user.get('dpa_basis') != 'school_pending' or user.get('dpa_version') != DPA_VERSION:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+    ctx = _dpa_org_context(user_id)
+    kind = 'org' if (ctx['org'] and ctx['is_admin'] and not ctx['org_confirmed']) else 'personal'
+    old = db_layer.get_dpa_confirmation_for(user_id, kind)
+    email = str(data.get('principal_email') or (old or {}).get('principal_email') or '').strip()[:254]
+    if not _EMAIL_RE.match(email):
+        return jsonify({'success': False, 'message': 'backend.dpaPrincipalInvalid'}), 400
+    if not smtp_is_configured():
+        return jsonify({'success': False, 'message': 'backend.dpaMailNotConfigured'}), 400
+    org_id = ctx['org']['id'] if kind == 'org' else None
+    token = _new_dpa_confirmation(kind, user_id, org_id, email)
+    try:
+        await send_dpa_confirmation_email(email, user.get('dpa_signer_name', ''),
+                                          user.get('dpa_signer_school', ''),
+                                          _dpa_confirm_link(token), kind, _dpa_lang(data.get('lang')))
+    except Exception as e:
+        logger.warning("Failed to send DPA confirmation mail: %s", type(e).__name__)
+        db_layer.delete_dpa_confirmation(_dpa_token_hash(token))
+        return jsonify({'success': False, 'message': 'backend.dpaMailFailed'}), 502
+    return jsonify({'success': True, 'message': 'backend.dpaConfirmationSent'})
+
+
+@app.route('/api/org/dpa/request', methods=['POST'])
+@rate_limit('org_manage')
+@login_required
+@org_admin_required
+async def api_org_dpa_request():
+    """Org owner asks the principal to confirm the school DPA (mail link), or
+    confirms it himself as principal/authorised person (``self``: true)."""
+    data = await request.get_json() or {}
+    org_id = request.org_id  # type: ignore
+    user_id = request.user['id']  # type: ignore
+    org = db_layer.get_org(org_id)
+    if not org:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+    if _org_dpa_confirmed(org_id):
+        return jsonify({'success': False, 'message': 'backend.dpaOrgAlreadyConfirmed'}), 409
+    lang = _dpa_lang(data.get('lang'))
+    if data.get('self') is True:
+        name = ' '.join(str(data.get('name') or '').split())[:DPA_SIGNER_NAME_MAX]
+        role = data.get('role')
+        if len(name) < 3 or role not in DPA_CONFIRM_ROLES or data.get('accepted') is not True:
+            return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+        now = datetime.now(timezone.utc).isoformat()
+        db_layer.set_org_dpa(org_id, DPA_VERSION, org['name'], name, role, now, _dpa_text_hash())
+        db_layer.delete_dpa_confirmation_for(user_id, 'org')
+        owner = db_layer.get_user_by_id(user_id)
+        if owner and owner.get('dpa_basis') == 'school_pending' and owner.get('dpa_version') == DPA_VERSION:
+            owner['dpa_basis'] = 'school_confirmed'
+            db_layer.put_user(owner['email'], owner)
+            db_layer.confirm_dpa_signature(user_id, DPA_VERSION, name, role, now)
+        return jsonify({'success': True, 'message': 'backend.dpaOrgConfirmed'})
+    email = str(data.get('principal_email') or '').strip()[:254]
+    if not _EMAIL_RE.match(email):
+        return jsonify({'success': False, 'message': 'backend.dpaPrincipalInvalid'}), 400
+    if not smtp_is_configured():
+        return jsonify({'success': False, 'message': 'backend.dpaMailNotConfigured'}), 400
+    owner = db_layer.get_user_by_id(user_id) or {}
+    token = _new_dpa_confirmation('org', user_id, org_id, email)
+    try:
+        await send_dpa_confirmation_email(email, owner.get('dpa_signer_name') or owner.get('username', ''),
+                                          org['name'], _dpa_confirm_link(token), 'org', lang)
+    except Exception as e:
+        logger.warning("Failed to send DPA confirmation mail: %s", type(e).__name__)
+        db_layer.delete_dpa_confirmation(_dpa_token_hash(token))
+        return jsonify({'success': False, 'message': 'backend.dpaMailFailed'}), 502
+    return jsonify({'success': True, 'message': 'backend.dpaConfirmationSent'})
+
+
+@app.route('/avv/confirm/<token>')
+async def dpa_confirm_page(token):
+    """Public page (no login) where a principal reads and confirms the DPA."""
+    row = _valid_confirmation(token)
+    school, signer = '', ''
+    if row:
+        if row['kind'] == 'org' and row['org_id']:
+            org = db_layer.get_org(row['org_id'])
+            school = (org or {}).get('name', '')
+        u = db_layer.get_user_by_id(row['user_id']) or {}
+        signer = u.get('dpa_signer_name') or u.get('username', '')
+        school = school or u.get('dpa_signer_school', '')
+    return await render_template('dpa_confirm.html', app_version=APP_VERSION, dpa_version=DPA_VERSION,
+                                 valid=bool(row), kind=(row or {}).get('kind', ''),
+                                 school=school, signer=signer, token=token if row else '')
+
+
+@app.route('/api/dpa/confirm/<token>', methods=['POST'])
+@rate_limit('dpa_confirm')
+async def api_dpa_confirm(token):
+    """Principal confirmation of a teacher's or an organisation's DPA."""
+    row = _valid_confirmation(token)
+    if not row:
+        return jsonify({'success': False, 'message': 'backend.dpaLinkInvalid'}), 404
+    data = await request.get_json() or {}
+    name = ' '.join(str(data.get('name') or '').split())[:DPA_SIGNER_NAME_MAX]
+    role = data.get('role')
+    school = _normalize_school(data.get('school'))
+    if len(name) < 3 or role not in DPA_CONFIRM_ROLES or len(school) < 2 or data.get('accepted') is not True:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+
+    now = datetime.now(timezone.utc).isoformat()
+    user = db_layer.get_user_by_id(row['user_id'])
+    if row['kind'] == 'org':
+        if not row['org_id'] or not db_layer.get_org(row['org_id']):
+            return jsonify({'success': False, 'message': 'backend.dpaLinkInvalid'}), 404
+        db_layer.set_org_dpa(row['org_id'], DPA_VERSION, school, name, role, now, _dpa_text_hash())
+    # The signer's own signature moves from pending to confirmed.
+    if user and user.get('dpa_basis') == 'school_pending' and user.get('dpa_version') == DPA_VERSION:
+        user['dpa_basis'] = 'school_confirmed'
+        user['dpa_confirmed_by_name'] = name
+        user['dpa_confirmed_by_role'] = role
+        user['dpa_confirmed_at'] = now
+        user['dpa_signer_school'] = school
+        db_layer.put_user(user['email'], user)
+        db_layer.confirm_dpa_signature(user['id'], DPA_VERSION, name, role, now)
+    db_layer.delete_dpa_confirmation(row['token_hash'])
+    logger.info("DPA %s confirmed by principal for user %s (%s)", DPA_VERSION, row['user_id'], row['kind'])
     return jsonify({'success': True})
+
+
+def cleanup_dpa_records(now: datetime | None = None) -> None:
+    """Drop expired confirmation links and signatures kept past their 3 years."""
+    now = now or datetime.now(timezone.utc)
+    db_layer.delete_expired_dpa_confirmations(now.isoformat())
+    db_layer.delete_expired_dpa_signatures((now - timedelta(days=DPA_RETENTION_DAYS)).isoformat())
+
+
+@app.route('/api/terms/accept', methods=['POST'])
+@login_required
+async def api_terms_accept():
+    """Record active consent to the current terms version (see TERMS_VERSION)."""
+    data = await request.get_json() or {}
+    if data.get('accepted') is not True or data.get('version') != TERMS_VERSION:
+        return jsonify({'success': False, 'message': 'backend.invalidRequest'}), 400
+    stored = db_layer.get_user_by_email(request.user['email'])  # type: ignore
+    if not stored:
+        return jsonify({'success': False}), 404
+    stored['terms_version'] = TERMS_VERSION
+    stored['terms_accepted_at'] = datetime.now(timezone.utc).isoformat()
+    db_layer.put_user(stored['email'], stored)
+    return jsonify({'success': True})
+
 
 @app.route('/docs')
 @app.route('/docs/')
@@ -2789,6 +3347,9 @@ async def api_register():
     if password != password_confirm:
         return jsonify({'success': False, 'message': 'backend.passwordsMismatch'}), 400
 
+    if data.get('terms') is not True:
+        return jsonify({'success': False, 'message': 'auth.acceptTerms'}), 400
+
     return await _registration_response(register_user(username, email, password))
 
 
@@ -2812,6 +3373,9 @@ async def api_register_org():
 
     if password != password_confirm:
         return jsonify({'success': False, 'message': 'backend.passwordsMismatch'}), 400
+
+    if data.get('terms') is not True:
+        return jsonify({'success': False, 'message': 'auth.acceptTerms'}), 400
 
     return await _registration_response(register_org_admin(org_name, username, email, password))
 
@@ -4313,6 +4877,9 @@ async def api_join_org():
     org = db_layer.get_org_by_join_code(join_code)
     if not org:
         return jsonify({'success': False, 'message': 'backend.orgCodeInvalid'}), 404
+    # An org whose school DPA is not confirmed yet takes no new members.
+    if not _org_dpa_confirmed(org['id']):
+        return jsonify({'success': False, 'message': 'backend.orgDpaPending'}), 403
 
     now = datetime.now().isoformat()
     db_layer.put_org_member(org['id'], user_id, 'teacher', 'pending', now, None)
@@ -4353,7 +4920,8 @@ async def api_org_status():
         'org': {
             'id': org['id'],
             'name': org['name'],
-            'join_code': org['join_code'] if membership['role'] == 'admin' else None
+            'join_code': org['join_code'] if membership['role'] == 'admin' else None,
+            'dpa_confirmed': _org_dpa_confirmed(org['id'])
         }
     })
 
@@ -4389,6 +4957,8 @@ async def api_org_approve_member(member_user_id):
     membership = db_layer.get_org_membership(member_user_id)
     if not membership or membership['org_id'] != org_id or membership['status'] != 'pending':
         return jsonify({'success': False, 'message': 'backend.orgMemberNotFound'}), 404
+    if not _org_dpa_confirmed(org_id):
+        return jsonify({'success': False, 'message': 'backend.orgDpaPending'}), 403
 
     now = datetime.now().isoformat()
     db_layer.approve_member(org_id, member_user_id, now)

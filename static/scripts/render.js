@@ -1421,7 +1421,8 @@ const openAddGradeDialog = (studentId, onSuccess) => {
     </div>
     <div class="grid gap-2">
       <label class="block mb-2">Textbeurteilung <span class="text-red-400">*</span></label>
-      <textarea name="gradeComment" id="grade-comment-input" class="input w-full" rows="3" placeholder="Schriftliche Erläuterung zur Beurteilung..."></textarea>
+      <textarea name="gradeComment" id="grade-comment-input" class="input w-full" rows="3" placeholder="${escapeHtml(t('grade.commentPlaceholder'))}"></textarea>
+      <p class="text-muted text-xs" style="color: var(--muted-foreground);">${t('privacy.sensitiveHint')}</p>
       <p class="text-gray-400 text-sm">Pflichtfeld – schriftliche Erläuterung zur Note.</p>
     </div>` : `
     <div class="grid gap-2" id="grade-value-container">
@@ -2046,6 +2047,7 @@ const renderStudents = () => {
               <label class="block mb-2">${t("student.notes")}</label>
               <textarea name="notes" class="input w-full" rows="4" maxlength="2000" placeholder="${escapeHtml(t("student.notesPlaceholder"))}">${escapeHtml(student.notes || '')}</textarea>
               <p class="text-gray-400 text-sm">${t("student.notesHint")}</p>
+              <p class="text-muted text-xs" style="color: var(--muted-foreground);">${t('privacy.sensitiveHint')}</p>
             </div>
           `;
 
@@ -4768,7 +4770,8 @@ const renderStudentGradesTable = (student, filteredGrades = null) => {
                             ${isPrimarySchool ? '<span class="text-red-400">*</span>' : '<span class="text-gray-400 text-sm">(optional)</span>'}
                         </label>
                         <textarea name="gradeComment" id="grade-comment-input-edit" class="input w-full" rows="3"
-                            placeholder="Schriftliche Erläuterung zur Beurteilung...">${escapeHtml(grade.comment || '')}</textarea>
+                            placeholder="${escapeHtml(t('grade.commentPlaceholder'))}">${escapeHtml(grade.comment || '')}</textarea>
+                        <p class="text-muted text-xs" style="color: var(--muted-foreground);">${t('privacy.sensitiveHint')}</p>
                         ${isPrimarySchool ? '<p class="text-gray-400 text-sm">Pflichtfeld – schriftliche Erläuterung zur Note.</p>' : ''}
                     </div>
                 `;

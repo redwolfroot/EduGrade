@@ -101,7 +101,7 @@
                         <li>Deine Daten werden ausschließlich für dich gespeichert und nicht weitergegeben oder ausgewertet.</li>
                         <li>Die Daten sind verschlüsselt und liegen auf Servern in Deutschland (EU).</li>
                         <li>Du kannst deine Daten jederzeit exportieren oder dein Konto samt allen Daten löschen.</li>
-                        <li>Nutzt du EduGrade für deine Schule, stimme die Nutzung bitte mit deiner Schulleitung ab.</li>
+                        <li>Nutzt du EduGrade für deine Schule, brauchst du dafür die Freigabe deiner Schulleitung. Ohne Freigabe bist du selbst datenschutzrechtlich verantwortlich.</li>
                     </ul>
                 </div>
                 <div data-lang-block="en">
@@ -110,7 +110,7 @@
                         <li>Your data is stored only for you and is not shared or analysed.</li>
                         <li>The data is encrypted and stored on servers in Germany (EU).</li>
                         <li>You can export your data or delete your account with all data at any time.</li>
-                        <li>If you use EduGrade for your school, please agree its use with your school management.</li>
+                        <li>If you use EduGrade for your school, you need the approval of your school management. Without approval you are yourself responsible under data protection law.</li>
                     </ul>
                 </div>
             </section>
@@ -130,22 +130,58 @@
             </header>
             <section>
                 <form id="dpa-sign-form" class="form grid gap-4">
+                    <fieldset class="grid gap-2" id="dpa-choice-group">
+                        <legend class="font-medium mb-1"><span data-lang-inline="de">Für wen schließt du den Vertrag ab?</span><span data-lang-inline="en">On whose behalf do you sign?</span></legend>
+                        {% if org_available %}
+                        <label class="flex items-start gap-2"><input type="radio" name="dpa-choice" value="org" class="mt-1" required>
+                            <span class="text-sm"><span data-lang-inline="de"><strong>Über die Organisation {{ org_name }}.</strong> Die Schulleitung hat den Vertrag für die ganze Schule unterzeichnet. Du bestätigst nur, dass du ihn gelesen hast.</span><span data-lang-inline="en"><strong>Via the organisation {{ org_name }}.</strong> The school management has signed the agreement for the whole school. You only confirm that you have read it.</span></span></label>
+                        {% endif %}
+                        {% if org_principal_option %}
+                        <label class="flex items-start gap-2"><input type="radio" name="dpa-choice" value="org_principal" class="mt-1" required>
+                            <span class="text-sm"><span data-lang-inline="de"><strong>Ich bin Schulleiter/in oder dazu bevollmächtigt</strong> und unterzeichne für die ganze Organisation {{ org_name }}.</span><span data-lang-inline="en"><strong>I am the head of school or authorised</strong> and sign for the whole organisation {{ org_name }}.</span></span></label>
+                        {% endif %}
+                        <label class="flex items-start gap-2"><input type="radio" name="dpa-choice" value="school" class="mt-1" required {% if not mail_available %}disabled{% endif %}>
+                            <span class="text-sm"><span data-lang-inline="de"><strong>Einzeln, mit Freigabe meiner Schulleitung.</strong> Die Schulleitung bestätigt per Link. Bis dahin gilt der Vertrag mit dir persönlich.</span><span data-lang-inline="en"><strong>On my own, with my school management's approval.</strong> The school management confirms via a link. Until then the agreement applies to you personally.</span>{% if not mail_available %} <em><span data-lang-inline="de">(auf diesem Server nicht verfügbar)</span><span data-lang-inline="en">(not available on this server)</span></em>{% endif %}</span></label>
+                        <label class="flex items-start gap-2"><input type="radio" name="dpa-choice" value="personal" class="mt-1" required>
+                            <span class="text-sm"><span data-lang-inline="de"><strong>Einzeln, auf eigene Verantwortung.</strong> Du bist selbst Verantwortliche/r.</span><span data-lang-inline="en"><strong>On my own responsibility.</strong> You are the controller yourself.</span></span></label>
+                    </fieldset>
+                    <p id="dpa-personal-warning" class="text-sm hidden" style="color: var(--destructive, #ef4444);"><span data-lang-inline="de">Ohne Freigabe deiner Schulleitung bist du selbst datenschutzrechtlich verantwortlich und trägst das Risiko gegenüber deiner Schule.</span><span data-lang-inline="en">Without the approval of your school management you are yourself responsible under data protection law and bear the risk towards your school.</span></p>
                     <div class="grid gap-2">
                         <label for="dpa-name"><span data-lang-inline="de">Vor- und Nachname</span><span data-lang-inline="en">First and last name</span></label>
                         <input type="text" id="dpa-name" name="name" class="input w-full" required minlength="3" maxlength="100" autocomplete="name">
                     </div>
-                    <div class="grid gap-2">
-                        <label for="dpa-school"><span data-lang-inline="de">Schule</span><span data-lang-inline="en">School</span> <span class="text-sm" style="color: var(--muted-foreground);"><span data-lang-inline="de">(falls du EduGrade für eine Schule nutzt)</span><span data-lang-inline="en">(if you use EduGrade for a school)</span></span></label>
+                    <label class="flex items-start gap-2 hidden" id="dpa-personal-ack-row">
+                        <input type="checkbox" id="dpa-personal-ack" class="mt-1">
+                        <span class="text-sm"><span data-lang-inline="de">Ich nutze EduGrade ohne Freigabe einer Schule, bin selbst datenschutzrechtlich verantwortlich und trage das Risiko gegenüber meiner Schule.</span><span data-lang-inline="en">I use EduGrade without a school's approval, I am myself responsible under data protection law and bear the risk towards my school.</span></span>
+                    </label>
+                    <div class="grid gap-2" id="dpa-school-row">
+                        <label for="dpa-school"><span data-lang-inline="de">Schule</span><span data-lang-inline="en">School</span></label>
                         <input type="text" id="dpa-school" name="school" class="input w-full" maxlength="120" value="{{ user.school or '' }}">
+                    </div>
+                    <div class="grid gap-2 hidden" id="dpa-principal-row">
+                        <label for="dpa-principal-email"><span data-lang-inline="de">E-Mail-Adresse der Schulleitung</span><span data-lang-inline="en">E-mail address of the school management</span></label>
+                        <input type="email" id="dpa-principal-email" class="input w-full" maxlength="254" autocomplete="off">
+                        <p class="text-xs" style="color: var(--muted-foreground);"><span data-lang-inline="de">Die Adresse dient nur als Plausibilitätsprüfung, nicht als sichere Identitätsprüfung. Sie wird nach der Bestätigung bzw. nach Ablauf des Links gelöscht.</span><span data-lang-inline="en">The address is only a plausibility check, not a reliable identity check. It is deleted after confirmation or once the link has expired.</span></p>
+                    </div>
+                    <div class="grid gap-2 hidden" id="dpa-role-row">
+                        <label for="dpa-role"><span data-lang-inline="de">Funktion</span><span data-lang-inline="en">Role</span></label>
+                        <select id="dpa-role" class="input w-full">
+                            <option value="principal">Schulleiter/in &middot; Head of school</option>
+                            <option value="delegated">Bevollmächtigt durch die Schulleitung &middot; Authorised by the school management</option>
+                        </select>
                     </div>
                     <label class="flex items-start gap-2">
                         <input type="checkbox" id="dpa-accept" class="mt-1" required>
-                        <span class="text-sm"><span data-lang-inline="de">Ich habe den Auftragsverarbeitungsvertrag (Version {{ dpa_version }}) gelesen und schließe ihn verbindlich ab &ndash; soweit ich für eine Schule handle, in deren Namen und mit deren Einverständnis.</span><span data-lang-inline="en">I have read the Data Processing Agreement (version {{ dpa_version }}) and conclude it bindingly &ndash; where I act for a school, on its behalf and with its consent. The German version is legally binding.</span></span>
+                        <span class="text-sm"><span data-lang-inline="de">Ich habe den Auftragsverarbeitungsvertrag (Version {{ dpa_version }}) gelesen und schließe ihn verbindlich ab.</span><span data-lang-inline="en">I have read the Data Processing Agreement (version {{ dpa_version }}) and conclude it bindingly. The German version is legally binding.</span></span>
+                    </label>
+                    <label class="flex items-start gap-2 hidden" id="dpa-school-ack-row">
+                        <input type="checkbox" id="dpa-school-ack" class="mt-1">
+                        <span class="text-sm"><span data-lang-inline="de">Ich bestätige, dass meine Schulleitung die Nutzung von EduGrade für diese Schule freigegeben bzw. mich dazu ermächtigt hat. Bis zu deren Bestätigung gilt der Vertrag mit mir persönlich.</span><span data-lang-inline="en">I confirm that my school management has approved the use of EduGrade for this school or has authorised me to do so. Until they confirm, the agreement applies to me personally.</span></span>
                     </label>
                     <p id="dpa-error" class="text-sm text-red-500 hidden"><span data-lang-inline="de">Unterzeichnen fehlgeschlagen. Bitte versuche es erneut.</span><span data-lang-inline="en">Signing failed. Please try again.</span></p>
                     <button type="submit" id="dpa-submit" class="btn-primary is-cta w-full" disabled><span data-lang-inline="de">Verbindlich unterzeichnen</span><span data-lang-inline="en">Sign bindingly</span></button>
                     <p id="dpa-wait" class="text-sm text-center" style="color: var(--muted-foreground);" aria-live="polite"></p>
-                    <p class="text-xs" style="color: var(--muted-foreground);"><span data-lang-inline="de">Gespeichert werden Name, Schule, Zeitpunkt und Vertragsversion. Die jeweils gültige Fassung kannst du jederzeit unter <a href="/avv" target="_blank" class="text-blue-400 hover:underline">/avv</a> nachlesen.</span><span data-lang-inline="en">We store your name, school, time and contract version. You can read the current version at any time at <a href="/avv" target="_blank" class="text-blue-400 hover:underline">/avv</a>.</span></p>
+                    <p class="text-xs" style="color: var(--muted-foreground);"><span data-lang-inline="de">Gespeichert werden Name, Schule, Zeitpunkt und Vertragsversion; bei Bestätigung durch die Schulleitung zusätzlich deren Name und Funktion (siehe <a href="/privacy" target="_blank" class="text-blue-400 hover:underline">Datenschutzerklärung</a>). Die jeweils gültige Fassung kannst du jederzeit unter <a href="/avv" target="_blank" class="text-blue-400 hover:underline">/avv</a> nachlesen.</span><span data-lang-inline="en">We store your name, school, time and contract version, and, once the school management confirms, their name and role (see <a href="/privacy" target="_blank" class="text-blue-400 hover:underline">privacy policy</a>). You can read the current version at any time at <a href="/avv" target="_blank" class="text-blue-400 hover:underline">/avv</a>.</span></p>
                 </form>
             </section>
         </section>
@@ -154,12 +190,12 @@
             <div>
                 <header>
                     <h2 id="dpa-intro-title">{% if resign %}<span data-lang-inline="de">Neue Fassung des AVV</span><span data-lang-inline="en">New version of the DPA</span>{% else %}<span data-lang-inline="de">Bevor es losgeht</span><span data-lang-inline="en">Before you start</span>{% endif %}</h2>
-                    <p>{% if resign %}<span data-lang-inline="de">Der Auftragsverarbeitungsvertrag wurde geändert. Bitte unterzeichne die neue Fassung, um EduGrade weiter zu nutzen.</span><span data-lang-inline="en">The Data Processing Agreement has changed. Please sign the new version to keep using EduGrade.</span>{% else %}<span data-lang-inline="de">Für die Schülerdaten in EduGrade brauchen wir einen kurzen Vertrag mit dir &ndash; das schreibt die DSGVO vor. Das dauert nur eine Minute.</span><span data-lang-inline="en">For the student data in EduGrade we need a short agreement with you &ndash; the GDPR requires it. It only takes a minute.</span>{% endif %}</p>
+                    <p>{% if resign %}<span data-lang-inline="de">Der Auftragsverarbeitungsvertrag wurde geändert. Bitte unterzeichne die neue Fassung, um EduGrade weiter zu nutzen.</span><span data-lang-inline="en">The Data Processing Agreement has changed. Please sign the new version to keep using EduGrade.</span>{% else %}<span data-lang-inline="de">Für die Schülerdaten in EduGrade brauchen wir einen kurzen Vertrag mit dir (das schreibt die DSGVO vor). Das dauert nur eine Minute.</span><span data-lang-inline="en">For the student data in EduGrade we need a short agreement with you (the GDPR requires it). It only takes a minute.</span>{% endif %}</p>
                 </header>
                 <section>
                     <ol class="dpa-steps">
                         <li><span data-lang-inline="de"><strong>Durchlesen:</strong> Oben steht das Wichtigste in Kürze, darunter der vollständige Vertrag.</span><span data-lang-inline="en"><strong>Read:</strong> The key points are at the top, followed by the full agreement.</span></li>
-                        <li><span data-lang-inline="de"><strong>Ausfüllen:</strong> Unten deinen Namen und &ndash; falls zutreffend &ndash; deine Schule eintragen.</span><span data-lang-inline="en"><strong>Fill in:</strong> Enter your name and &ndash; if applicable &ndash; your school at the bottom.</span></li>
+                        <li><span data-lang-inline="de"><strong>Ausfüllen:</strong> Unten den Weg wählen, deinen Namen und, falls zutreffend, deine Schule eintragen.</span><span data-lang-inline="en"><strong>Fill in:</strong> Choose an option at the bottom and enter your name and, if applicable, your school.</span></li>
                         <li><span data-lang-inline="de"><strong>Unterzeichnen:</strong> Häkchen setzen und auf &bdquo;Verbindlich unterzeichnen&ldquo; klicken. Damit du den Vertrag in Ruhe lesen kannst, ist das erst nach einer Minute möglich. Danach geht es direkt in die App.</span><span data-lang-inline="en"><strong>Sign:</strong> Tick the box and click &ldquo;Sign bindingly&rdquo;. So you can read the agreement in peace, this is only possible after one minute. Then you go straight to the app.</span></li>
                     </ol>
                 </section>
@@ -181,6 +217,23 @@
         const form = document.getElementById('dpa-sign-form');
         const btn = document.getElementById('dpa-submit');
         const err = document.getElementById('dpa-error');
+        const currentChoice = () => (form.querySelector('input[name="dpa-choice"]:checked') || {}).value || '';
+        const toggle = (id, on) => document.getElementById(id).classList.toggle('hidden', !on);
+        const refreshChoice = () => {
+            const c = currentChoice();
+            toggle('dpa-personal-warning', c === 'personal');
+            toggle('dpa-principal-row', c === 'school');
+            toggle('dpa-school-ack-row', c === 'school');
+            toggle('dpa-role-row', c === 'org_principal');
+            toggle('dpa-personal-ack-row', c === 'personal');
+            toggle('dpa-school-row', c !== 'org' && c !== 'personal');
+            document.getElementById('dpa-personal-ack').required = c === 'personal';
+            document.getElementById('dpa-principal-email').required = c === 'school';
+            document.getElementById('dpa-school-ack').required = c === 'school';
+            document.getElementById('dpa-school').required = c === 'school' || c === 'org_principal';
+        };
+        form.querySelectorAll('input[name="dpa-choice"]').forEach(r => r.addEventListener('change', refreshChoice));
+        refreshChoice();
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             err.classList.add('hidden');
@@ -192,6 +245,12 @@
                     body: JSON.stringify({
                         name: document.getElementById('dpa-name').value,
                         school: document.getElementById('dpa-school').value,
+                        choice: currentChoice(),
+                        principal_email: document.getElementById('dpa-principal-email').value,
+                        school_ack: document.getElementById('dpa-school-ack').checked,
+                        personal_ack: document.getElementById('dpa-personal-ack').checked,
+                        role: document.getElementById('dpa-role').value,
+                        lang: window.getLegalLang ? window.getLegalLang() : 'de',
                         accepted: document.getElementById('dpa-accept').checked,
                         version: '{{ dpa_version }}'
                     })
@@ -200,6 +259,13 @@
                 const data = await res.json().catch(() => ({}));
                 if (data.success) { window.location.href = '/'; return; }
                 err.classList.remove('hidden');
+                if (data.message) {
+                    try {
+                        const lang = window.getLegalLang && window.getLegalLang() === 'en' ? 'en' : 'de';
+                        const dict = await (await fetch('/static/i18n/' + lang + '.json')).json();
+                        if (dict[data.message]) err.textContent = dict[data.message];
+                    } catch (_) { /* keep the generic text */ }
+                }
             } catch (_) {
                 err.classList.remove('hidden');
             }
@@ -221,8 +287,8 @@
                     return;
                 }
                 wait.textContent = window.getLegalLang() === 'en'
-                    ? `You can sign in ${left} second${left === 1 ? '' : 's'} – please read the agreement in the meantime.`
-                    : `Unterzeichnen in ${left} Sekunde${left === 1 ? '' : 'n'} möglich – bitte lies den Vertrag in der Zwischenzeit.`;
+                    ? `You can sign in ${left} second${left === 1 ? '' : 's'}: please read the agreement in the meantime.`
+                    : `Unterzeichnen in ${left} Sekunde${left === 1 ? '' : 'n'} möglich, bitte lies den Vertrag in der Zwischenzeit.`;
                 setTimeout(tick, 1000);
             };
             tick();

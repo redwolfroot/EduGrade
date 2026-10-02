@@ -78,14 +78,53 @@ const renderOrgJoinCodeBlock = (joinCode) => `
             <input type="text" class="input flex-1 font-mono" value="${safeAttr(joinCode)}" readonly id="org-join-code-display">
             <button id="org-copy-code-btn" class="btn-outline shrink-0">${lucideIcon('copy')} ${t("org.copyCode")}</button>
         </div>
+        <div id="org-dpa-notice" class="pt-2"></div>
     </div>
 `;
+
+/**
+ * Notice for an org owner whose school DPA is not confirmed by the school
+ * management yet (new orgs, and every org that existed before the DPA
+ * confirmation): no new members can join until it is. Offers the
+ * confirmation e-mail to the principal.
+ */
+const renderOrgDpaNotice = async () => {
+    const box = document.getElementById('org-dpa-notice');
+    if (!box) return;
+    try {
+        const status = await (await fetch('/api/org/status')).json();
+        if (!status.success || !status.member || !status.org || status.org.dpa_confirmed) return;
+        box.innerHTML = `
+            <p class="text-sm text-yellow-500">${t("dpaNotice.orgPending")}</p>
+            <div class="flex gap-2 mt-2">
+                <input type="email" id="org-dpa-principal-email" class="input flex-1" placeholder="${safeAttr(t("dpaNotice.principalEmail"))}">
+                <button id="org-dpa-request-btn" class="btn-outline shrink-0">${t("dpaNotice.askPrincipal")}</button>
+            </div>`;
+        document.getElementById('org-dpa-request-btn').addEventListener('click', async () => {
+            const email = document.getElementById('org-dpa-principal-email').value.trim();
+            if (!email) return;
+            const lang = (typeof I18n !== 'undefined' && I18n.getCurrentLanguage() === 'en') ? 'en' : 'de';
+            try {
+                const res = await fetch('/api/org/dpa/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ principal_email: email, lang })
+                });
+                const data = await res.json();
+                showToast(data.message ? t(data.message) : t("error.connectionError"), data.success ? 'success' : 'error');
+            } catch (e) {
+                showToast(t("error.connectionError"), 'error');
+            }
+        });
+    } catch (e) { /* notice is optional */ }
+};
 
 /**
  * Wires the copy button rendered by renderOrgJoinCodeBlock. Must be called
  * after the block's markup has been inserted into the DOM.
  */
 const wireOrgJoinCodeCopyBtn = (joinCode) => {
+    renderOrgDpaNotice();
     const copyBtn = document.getElementById('org-copy-code-btn');
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {

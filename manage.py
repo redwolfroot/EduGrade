@@ -179,6 +179,21 @@ def _db():
     return sqlite3.connect(f"file:{DB_FILE}?mode=ro", uri=True)
 
 
+DPA_COLUMNS = ("signer_name", "signer_school", "basis", "confirmed_by_name",
+               "confirmed_by_role", "version", "accepted_at", "contract_ended_at")
+
+
+def load_dpa_signatures(open_only: bool = False) -> list[dict]:
+    """Archived DPA signatures, newest first. `open_only` = still waiting for
+    the principal's confirmation (basis school_pending)."""
+    where = " WHERE basis = 'school_pending'" if open_only else ""
+    with _db() as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute(
+            f"SELECT {', '.join(DPA_COLUMNS)} FROM dpa_signatures{where} ORDER BY accepted_at DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
 def collect_stats() -> list[tuple[str, list[tuple[str, object]]]]:
     now = datetime.now()
     iso = lambda d: (now - timedelta(days=d)).isoformat()
@@ -524,6 +539,78 @@ class Console(cmd.Cmd):
             print(dim(f"\n  {missing} Lehrer-Konto/Konten noch ohne Schule — werden beim nächsten Login danach gefragt."))
         print()
 
+    # --- backups ---
+    def do_backup(self, _arg):
+        """backup — verschlüsselte Datenbank-Sicherung jetzt erstellen (BACKUP_KEY nötig)"""
+        import backup
+        if not backup.get_backup_key():
+            print(red("  BACKUP_KEY ist nicht gesetzt (Umgebungsvariable) – keine Sicherung möglich."))
+            return
+        path = backup.create_backup()
+        removed = backup.prune_backups()
+        print(green(f"  ✓ Sicherung erstellt: {path}") +
+              dim(f"  ({path.stat().st_size // 1024} KB, {len(removed)} alte gelöscht, Aufbewahrung {backup.RETENTION_DAYS} Tage)"))
+
+    def do_restore(self, arg):
+        """restore <datei> — Datenbank aus Sicherung wiederherstellen (Server muss gestoppt sein)"""
+        import backup
+        files = backup.list_backups()
+        name = arg.strip()
+        if not name:
+            if not files:
+                print(dim(f"  Keine Sicherungen in {backup.backup_dir()}."))
+            else:
+                print(f"  {bold('Vorhandene Sicherungen')} {dim('(restore <datei>)')}")
+                for p in files:
+                    print(f"    {p.name}  {dim(str(p.stat().st_size // 1024) + ' KB')}")
+            return
+        if self.embedded:
+            print(red("  Wiederherstellen geht nicht im laufenden Server (Datenbank ist in Benutzung)."))
+            print("  Server stoppen und im Stillstand ausführen, siehe README (Abschnitt „Backups und Wiederherstellung“).")
+            return
+        path = Path(name)
+        if not path.is_file():
+            path = backup.backup_dir() / name
+        if not path.is_file():
+            print(red(f"  Datei nicht gefunden: {name}"))
+            return
+        if not backup.get_backup_key():
+            print(red("  BACKUP_KEY ist nicht gesetzt (Umgebungsvariable) – Entschlüsselung nicht möglich."))
+            return
+        print(f"  Die aktuelle Datenbank {dim(str(DB_FILE))} wird ersetzt durch {bold(path.name)}.")
+        print(dim("  Die bisherige Datei bleibt als edugrade.db.before-restore-… daneben liegen."))
+        if not ask_yes("Server ist gestoppt und du willst wirklich wiederherstellen?", default=False):
+            print(dim("  Abgebrochen."))
+            return
+        try:
+            safety = backup.restore_backup(path)
+        except backup.BackupError as e:
+            print(red(f"  Fehler: {e}"))
+            return
+        print(green("  ✓ Datenbank wiederhergestellt.") +
+              (dim(f" Vorherige Datei: {safety.name}") if safety else ""))
+        print(dim("  Server jetzt wieder starten und Funktion prüfen."))
+
+    # --- DPA archive ---
+    def do_dpa(self, arg):
+        """dpa [--open] — AVV-Unterzeichnungen auflisten (--open: Bestätigung der Schulleitung steht aus)"""
+        open_only = "--open" in arg.split()
+        try:
+            rows = load_dpa_signatures(open_only)
+        except (FileNotFoundError, sqlite3.Error) as e:
+            print(red(f"  {e}"))
+            return
+        if not rows:
+            print(dim("  Keine Unterzeichnungen" + (" mit offener Bestätigung." if open_only else ".")))
+            return
+        print(f"\n  {bold('AVV-Unterzeichnungen')} {dim(f'— {len(rows)}, neueste zuerst')}\n")
+        for r in rows:
+            confirmed = f", bestätigt von {r['confirmed_by_name']} ({r['confirmed_by_role']})" if r["confirmed_by_name"] else ""
+            ended = f", beendet {r['contract_ended_at'][:10]}" if r["contract_ended_at"] else ""
+            detail = f"{r['signer_school'] or '-'}, {r['basis']}{confirmed}{ended}"
+            print(f"  {r['accepted_at'][:16]}  v{r['version']}  {bold(r['signer_name'])}  {dim(detail)}")
+        print()
+
     # --- misc ---
     def do_exit(self, _arg):
         """exit — Konsole beenden"""
@@ -543,7 +630,7 @@ class Console(cmd.Cmd):
         if arg:
             return super().do_help(arg)
         print()
-        for name in ("stats", "users", "schools", "announce", "announcements", "unannounce", "exit"):
+        for name in ("stats", "users", "schools", "announce", "announcements", "unannounce", "backup", "restore", "dpa", "exit"):
             doc = getattr(self, f"do_{name}").__doc__ or ""
             usage, _, text = doc.partition(" — ")
             print(f"  {bold(usage):<40} {text}")

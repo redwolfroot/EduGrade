@@ -48,3 +48,6 @@ sample_data.json
 
 # Logs
 *.log
+
+# Local backups
+backups/

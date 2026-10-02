@@ -1746,6 +1746,7 @@ function openEditAttendanceDialog(studentId, attendanceId) {
         <label for="edit-attendance-notes" class="text-sm font-medium">${t('attendance.notes')}</label>
         <textarea id="edit-attendance-notes" name="edit-attendance-notes" class="textarea" rows="3" maxlength="200">${escapeHtml(entry.notes || '')}</textarea>
         <p class="text-gray-400 text-sm">${t('attendance.notesHint') || 'Optional'}</p>
+        <p class="text-muted text-xs" style="color: var(--muted-foreground);">${t('privacy.sensitiveHint')}</p>
       </div>
     </form>
   `;
@@ -2007,6 +2008,7 @@ const openBehaviorDialog = (studentId, entryId = null, onSuccess = null) => {
     <div class="grid gap-2">
       <label for="behavior-note" class="text-sm font-medium">${t('behavior.note')}</label>
       <textarea id="behavior-note" name="note" class="textarea" rows="4" maxlength="${BEHAVIOR_NOTE_MAX}" required placeholder="${safeAttr(t('behavior.notePlaceholder'))}">${escapeHtml(values.note)}</textarea>
+      <p class="text-muted text-xs" style="color: var(--muted-foreground);">${t('privacy.sensitiveHint')}</p>
     </div>
   `;
 

@@ -1,3 +1,7 @@
+VVT_EduGrade.md
+.env
+*.env
+LEGAL_FIXES.md
 .claude/settings.local.json
 
 # Config file with secret key (generated on first start)
@@ -27,3 +31,6 @@ findings.md
 *-plan.md
 run2.py
 static/_splash-test.html
+
+# Encrypted DB backups
+backups/

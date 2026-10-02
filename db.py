@@ -16,6 +16,7 @@ import json
 import logging
 import sqlite3
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -179,6 +180,55 @@ _CREATE_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_class_handovers_to_status ON class_handovers(to_user_id, status)",
     "CREATE INDEX IF NOT EXISTS idx_class_handovers_from ON class_handovers(from_user_id)",
+    # DPA (AVV) signature archive. Deliberately has no foreign key to users and
+    # stores no e-mail address: the proof of signing outlives the account and
+    # is kept for 3 years after the contract ended (see delete_account).
+    """
+    CREATE TABLE IF NOT EXISTS dpa_signatures (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id       TEXT NOT NULL,
+        version       TEXT NOT NULL,
+        accepted_at   TEXT NOT NULL,
+        signer_name   TEXT NOT NULL,
+        signer_school TEXT,
+        basis         TEXT NOT NULL,
+        org_id        TEXT,
+        confirmed_by_name TEXT,
+        confirmed_by_role TEXT,
+        confirmed_at  TEXT,
+        text_sha256   TEXT NOT NULL,
+        contract_ended_at TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_dpa_sig_user ON dpa_signatures(user_id)",
+    # School-level DPA of an org. No row (or an outdated version) = the org is
+    # "pending": existing members keep working, nobody new can join.
+    """
+    CREATE TABLE IF NOT EXISTS org_dpa (
+        org_id            TEXT PRIMARY KEY,
+        version           TEXT NOT NULL,
+        school_name       TEXT,
+        confirmed_by_name TEXT NOT NULL,
+        confirmed_by_role TEXT NOT NULL,
+        confirmed_at      TEXT NOT NULL,
+        text_sha256       TEXT NOT NULL
+    )
+    """,
+    # One-time confirmation links for the school principal (only the token
+    # hash is stored). principal_email is kept only until confirmed/expired.
+    """
+    CREATE TABLE IF NOT EXISTS dpa_confirmations (
+        token_hash      TEXT PRIMARY KEY,
+        kind            TEXT NOT NULL,
+        user_id         TEXT NOT NULL,
+        org_id          TEXT,
+        version         TEXT NOT NULL,
+        principal_email TEXT,
+        created_at      TEXT NOT NULL,
+        expires_at      TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_dpa_conf_user ON dpa_confirmations(user_id)",
 ]
 
 
@@ -265,8 +315,17 @@ def delete_account(email: str) -> list[str]:
                 _conn.execute("DELETE FROM orgs WHERE id = ?", (org_id,))
                 _conn.execute("DELETE FROM org_members WHERE org_id = ?", (org_id,))
                 _conn.execute("DELETE FROM org_roster WHERE org_id = ?", (org_id,))
+                _conn.execute("DELETE FROM org_dpa WHERE org_id = ?", (org_id,))
+                _conn.execute("DELETE FROM dpa_confirmations WHERE org_id = ?", (org_id,))
             _conn.execute("DELETE FROM org_members WHERE user_id = ?", (user_id,))
             _conn.execute("DELETE FROM org_roster WHERE user_id = ?", (user_id,))
+            # The DPA proof is kept (3 years, see delete_expired_dpa_signatures);
+            # only mark the contract as ended. Open confirmation links go.
+            _conn.execute(
+                "UPDATE dpa_signatures SET contract_ended_at = ? "
+                "WHERE user_id = ? AND contract_ended_at IS NULL",
+                (datetime.now(timezone.utc).isoformat(), user_id))
+            _conn.execute("DELETE FROM dpa_confirmations WHERE user_id = ?", (user_id,))
             # Shares (link + PIN), handovers in either direction and reset
             # tokens must not outlive the account.
             _conn.execute(
@@ -771,6 +830,8 @@ def delete_org(org_id: str) -> None:
             _conn.execute("DELETE FROM orgs WHERE id = ?", (org_id,))
             _conn.execute("DELETE FROM org_members WHERE org_id = ?", (org_id,))
             _conn.execute("DELETE FROM org_roster WHERE org_id = ?", (org_id,))
+            _conn.execute("DELETE FROM org_dpa WHERE org_id = ?", (org_id,))
+            _conn.execute("DELETE FROM dpa_confirmations WHERE org_id = ?", (org_id,))
 
 
 # ---------------------------------------------------------------------------
@@ -886,3 +947,195 @@ def delete_expired_handovers(now_iso: str) -> None:
         "DELETE FROM class_handovers WHERE expires_at < ?",
         (now_iso,),
     )
+
+
+# ---------------------------------------------------------------------------
+# Inactivity tracking (account deletion after 12 months without use)
+# ---------------------------------------------------------------------------
+
+def touch_last_active(user_id: str, now_iso: str) -> None:
+    """Set ``last_active_at`` and reset every inactivity-warning marker, in one
+    statement (no read-modify-write race with other user-doc writers)."""
+    _execute_write(
+        """
+        UPDATE users
+           SET doc = json_remove(
+                         json_set(doc, '$.last_active_at', ?),
+                         '$.inactivity_warnings_sent',
+                         '$.inactivity_first_warning_at',
+                         '$.inactivity_admin_notified_at'
+                     )
+         WHERE id = ?
+        """,
+        (now_iso, user_id),
+    )
+
+
+def set_user_json_field(user_id: str, key: str, value: Any) -> None:
+    """Atomically set one top-level field of the user doc (``key`` must be a
+    plain identifier chosen by the caller, never user input)."""
+    if not key.replace("_", "").isalnum():
+        raise ValueError("invalid field name")
+    _execute_write(
+        f"UPDATE users SET doc = json_set(doc, '$.{key}', json(?)) WHERE id = ?",
+        (json.dumps(value), user_id),
+    )
+
+
+def record_inactivity_warning(user_id: str, stage: int, now_iso: str) -> None:
+    """Mark warning *stage* (1..3) as sent; the first one also stamps the time."""
+    with _write_lock:
+        _conn.execute(
+            """
+            UPDATE users
+               SET doc = json_set(
+                             doc,
+                             '$.inactivity_warnings_sent', ?,
+                             '$.inactivity_first_warning_at',
+                             COALESCE(json_extract(doc, '$.inactivity_first_warning_at'), ?)
+                         )
+             WHERE id = ?
+            """,
+            (stage, now_iso, user_id),
+        )
+
+
+# ---------------------------------------------------------------------------
+# DPA (AVV) signature archive, org-level DPA, confirmation links
+# ---------------------------------------------------------------------------
+
+def add_dpa_signature(user_id: str, version: str, accepted_at: str, signer_name: str,
+                      signer_school: str | None, basis: str, text_sha256: str,
+                      org_id: str | None = None, confirmed_by_name: str | None = None,
+                      confirmed_by_role: str | None = None,
+                      confirmed_at: str | None = None) -> int:
+    """Archive one signature. Idempotent per (user_id, version, accepted_at).
+    Returns the row id. Never stores an e-mail address."""
+    with _write_lock:
+        row = _conn.execute(
+            "SELECT id FROM dpa_signatures WHERE user_id = ? AND version = ? AND accepted_at = ?",
+            (user_id, version, accepted_at)).fetchone()
+        if row:
+            return row["id"]
+        cur = _conn.execute(
+            "INSERT INTO dpa_signatures (user_id, version, accepted_at, signer_name, signer_school, "
+            "basis, org_id, confirmed_by_name, confirmed_by_role, confirmed_at, text_sha256) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, version, accepted_at, signer_name, signer_school, basis, org_id,
+             confirmed_by_name, confirmed_by_role, confirmed_at, text_sha256))
+        return cur.lastrowid
+
+
+def list_dpa_signatures(user_id: str) -> list[dict]:
+    """All archived signatures of *user_id*, oldest first."""
+    rows = _conn.execute(
+        "SELECT * FROM dpa_signatures WHERE user_id = ? ORDER BY id", (user_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def confirm_dpa_signature(user_id: str, version: str, confirmed_by_name: str,
+                          confirmed_by_role: str, confirmed_at: str) -> None:
+    """Upgrade the user's pending signature of *version* to school_confirmed."""
+    _execute_write(
+        "UPDATE dpa_signatures SET basis = 'school_confirmed', confirmed_by_name = ?, "
+        "confirmed_by_role = ?, confirmed_at = ? WHERE id = ("
+        "SELECT id FROM dpa_signatures WHERE user_id = ? AND version = ? AND basis = 'school_pending' "
+        "ORDER BY id DESC LIMIT 1)",
+        (confirmed_by_name, confirmed_by_role, confirmed_at, user_id, version))
+
+
+def mark_dpa_contract_ended(user_id: str, ended_at: str) -> None:
+    """Mark all still-open signatures of *user_id* as ended at *ended_at*."""
+    _execute_write(
+        "UPDATE dpa_signatures SET contract_ended_at = ? "
+        "WHERE user_id = ? AND contract_ended_at IS NULL", (ended_at, user_id))
+
+
+def delete_expired_dpa_signatures(cutoff_iso: str) -> int:
+    """Delete signatures whose contract ended before *cutoff_iso*. Returns the count."""
+    cur = _execute_write(
+        "DELETE FROM dpa_signatures WHERE contract_ended_at IS NOT NULL AND contract_ended_at < ?",
+        (cutoff_iso,))
+    return cur.rowcount
+
+
+def migrate_dpa_signatures_from_users() -> int:
+    """One-time/idempotent import of the DPA data stored in the user documents
+    (current signature plus dpa_history) into dpa_signatures."""
+    added = 0
+    for _email, u in iter_users():
+        uid = u.get("id")
+        if not uid:
+            continue
+        entries = list(u.get("dpa_history") or [])
+        if u.get("dpa_version"):
+            entries.append({
+                "version": u.get("dpa_version"), "accepted_at": u.get("dpa_accepted_at"),
+                "signer_name": u.get("dpa_signer_name"), "signer_school": u.get("dpa_signer_school"),
+                "text_sha256": u.get("dpa_text_sha256"),
+                "basis": u.get("dpa_basis"), "org_id": u.get("dpa_org_id"),
+            })
+        for e in entries:
+            if not e.get("version") or not e.get("accepted_at"):
+                continue
+            before = _conn.execute(
+                "SELECT COUNT(*) AS n FROM dpa_signatures WHERE user_id = ?", (uid,)).fetchone()["n"]
+            add_dpa_signature(uid, e["version"], e["accepted_at"], e.get("signer_name") or "",
+                              e.get("signer_school"), e.get("basis") or "personal",
+                              e.get("text_sha256") or "", org_id=e.get("org_id"))
+            after = _conn.execute(
+                "SELECT COUNT(*) AS n FROM dpa_signatures WHERE user_id = ?", (uid,)).fetchone()["n"]
+            added += after - before
+    return added
+
+
+def get_org_dpa(org_id: str) -> dict | None:
+    row = _conn.execute("SELECT * FROM org_dpa WHERE org_id = ?", (org_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def set_org_dpa(org_id: str, version: str, school_name: str | None, confirmed_by_name: str,
+                confirmed_by_role: str, confirmed_at: str, text_sha256: str) -> None:
+    _execute_write(
+        "INSERT OR REPLACE INTO org_dpa (org_id, version, school_name, confirmed_by_name, "
+        "confirmed_by_role, confirmed_at, text_sha256) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (org_id, version, school_name, confirmed_by_name, confirmed_by_role, confirmed_at, text_sha256))
+
+
+def put_dpa_confirmation(token_hash: str, kind: str, user_id: str, org_id: str | None,
+                         version: str, principal_email: str | None, created_at: str,
+                         expires_at: str) -> None:
+    """Store a confirmation link; replaces older open links of the same user and kind."""
+    with _write_lock:
+        with _conn:
+            _conn.execute("DELETE FROM dpa_confirmations WHERE user_id = ? AND kind = ?",
+                          (user_id, kind))
+            _conn.execute(
+                "INSERT INTO dpa_confirmations (token_hash, kind, user_id, org_id, version, "
+                "principal_email, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (token_hash, kind, user_id, org_id, version, principal_email, created_at, expires_at))
+
+
+def get_dpa_confirmation(token_hash: str) -> dict | None:
+    row = _conn.execute(
+        "SELECT * FROM dpa_confirmations WHERE token_hash = ?", (token_hash,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_dpa_confirmation_for(user_id: str, kind: str) -> dict | None:
+    row = _conn.execute(
+        "SELECT * FROM dpa_confirmations WHERE user_id = ? AND kind = ?", (user_id, kind)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_dpa_confirmation(token_hash: str) -> None:
+    _execute_write("DELETE FROM dpa_confirmations WHERE token_hash = ?", (token_hash,))
+
+
+def delete_dpa_confirmation_for(user_id: str, kind: str) -> None:
+    _execute_write("DELETE FROM dpa_confirmations WHERE user_id = ? AND kind = ?", (user_id, kind))
+
+
+def delete_expired_dpa_confirmations(now_iso: str) -> int:
+    cur = _execute_write("DELETE FROM dpa_confirmations WHERE expires_at < ?", (now_iso,))
+    return cur.rowcount

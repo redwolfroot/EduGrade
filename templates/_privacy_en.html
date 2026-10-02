@@ -2,7 +2,7 @@
             <div class="p-6 sm:p-8 text-center">
                 <h2 class="text-3xl sm:text-4xl font-bold mb-4">Privacy Policy</h2>
                 <p class="text-lg opacity-90 mb-2">How EduGrade handles your data</p>
-                <p class="text-sm opacity-70">Last updated: October 2026</p>
+                <p class="text-sm opacity-70">Version 2.0 &middot; Last updated: 2026-10-02</p>
             </div>
         </section>
 
@@ -43,8 +43,8 @@
             </header>
             <section class="pp space-y-3">
                 <p><strong>Account data</strong> (e.g. your email address) is processed by us as controller; this privacy policy applies to it.</p>
-                <p><strong>Student data</strong> (names, grades, attendance etc.) is entered by you as a teacher. You or your school are the controller for it, and we act as your <strong>processor</strong> under Art.&nbsp;28 GDPR. The details are set out in the <a href="/avv">Data Processing Agreement (DPA)</a>, which you sign before first use.</p>
-                <p>As controller for student data you need a legal basis &ndash; at schools this is usually the statutory duty to assess performance (Art.&nbsp;6(1)(c) or (e) GDPR); parental consent is normally not required. Please agree the use of EduGrade with your school management and inform parents and students as part of your school's data protection notice. EduGrade can create a template for this as a PDF.</p>
+                <p><strong>Student data</strong> (names, grades, attendance etc.) is entered by you as a teacher. You or your school are the controller for it, and we act as your <strong>processor</strong> under Art.&nbsp;28 GDPR. The details are set out in the <a href="/avv">Data Processing Agreement (DPA)</a>, which is concluded before first use, by you or via your school.</p>
+                <p>Which legal basis applies to student data is determined by the school as controller. For performance assessment, Art.&nbsp;6(1)(e) GDPR in conjunction with the school law provisions (including § 18 SchUG and the Leistungsbeurteilungsverordnung) will usually come into consideration. Use EduGrade for your school only with the approval of the school management, and inform parents and students as part of your school's data protection notice. EduGrade can create a template for this as a PDF.</p>
             </section>
         </section>
 
@@ -96,10 +96,11 @@
                     <tr><td>Providing EduGrade, account, sign-in, synchronisation</td><td>Contract (Art.&nbsp;6(1)(b) GDPR)</td></tr>
                     <tr><td>System emails (confirmation and sign-in codes, password reset, recovery key, organisation notifications)</td><td>Contract (Art.&nbsp;6(1)(b) GDPR)</td></tr>
                     <tr><td>Security: rate limiting, account lock, server logs, display of sign-in attempts</td><td>Legitimate interest in secure operation (Art.&nbsp;6(1)(f) GDPR)</td></tr>
-                    <tr><td>Proof of the DPA</td><td>Legal obligation (Art.&nbsp;6(1)(c) in conjunction with Art.&nbsp;28 GDPR)</td></tr>
+                    <tr><td>Proof of the DPA, also after the agreement ends</td><td>Legal obligation (Art.&nbsp;6(1)(c) in conjunction with Art.&nbsp;5(2) and Art.&nbsp;28 GDPR); after the agreement ends, legitimate interest in defending claims (Art.&nbsp;6(1)(f) GDPR)</td></tr>
                     <tr><td>Student data</td><td>Processing on behalf (Art.&nbsp;28 GDPR) &ndash; legal basis lies with the controller, see section&nbsp;2</td></tr>
                 </table>
                 <p>We do not use your data for advertising, profiling or analytics, and we do not sell it.</p>
+                <p>Calculated averages and statistics are aids. Grades are set exclusively by the teacher. Automated decisions within the meaning of Art.&nbsp;22 GDPR do not take place.</p>
             </section>
         </section>
 
@@ -111,7 +112,7 @@
                 </h3>
             </header>
             <section class="pp space-y-3">
-                <p>All data is stored on servers of <strong>STRATO GmbH</strong> in data centres in <strong>Germany</strong>. Emails are sent from a mail server we operate ourselves. Your account and gradebook data is not transferred to countries outside the EU (for the DNS service see the recipients section; for external links see section&nbsp;7).</p>
+                <p>All data is stored on servers of <strong>STRATO GmbH</strong>. The contract data is stored exclusively in data centres in Germany. STRATO's sub-processors may act from Switzerland for maintenance and support (adequacy decision, Art.&nbsp;45 GDPR). Emails are sent from a mail server we operate ourselves. Apart from the access from Switzerland described above, your account and gradebook data is not transferred to countries outside the EU (for the DNS service see the recipients section; for external links see section&nbsp;7).</p>
                 <p><strong>Your gradebook</strong> is encrypted with AES-256-GCM. The key is derived from your password when you sign in (PBKDF2) and is kept only in the server's memory during an active session &ndash; never permanently. Without your password, your recovery key or your paired smartphone the stored data cannot be decrypted. When you sign in, the server sees your password and keeps the key in memory until the session ends; without an active session the data cannot be decrypted by us. Encryption and decryption happen on the server, not in the browser; true end-to-end encryption is planned.</p>
                 <p><strong>Exceptions</strong> &ndash; this data is not encrypted with your personal key:</p>
                 <ul>
@@ -132,7 +133,7 @@
             </header>
             <section class="pp space-y-3">
                 <h4>Class sharing (student access)</h4>
-                <p>You can give students or parents access to their grades via a link and a personal PIN. For this, a snapshot of the class (students, grades, participation, notes, categories, subjects &ndash; without the behaviour log) is stored encrypted with a server key and updated when you make changes. After entering the PIN, each person sees only their own data, to the extent you choose. The share expires after the chosen period and is deleted shortly afterwards; you can revoke it at any time.</p>
+                <p>You can give students or parents access to their grades via a link and a personal PIN. For this, a snapshot of the class (students, grades, participation, notes, categories, subjects &ndash; without the behaviour log) is stored encrypted with a server key and updated when you make changes. After entering the PIN, each person sees only their own data, to the extent you choose. The share expires after the chosen period and is deleted shortly afterwards; you can revoke it at any time. Shares are encrypted with a server key and are therefore technically readable by the operator.</p>
                 <h4>Organisations</h4>
                 <p>If your school joins as an organisation, all confirmed members see a shared student list with student name, class and teacher (no grades). The organisation administrators also see the members' usernames and email addresses.</p>
                 <h4>Class handover</h4>
@@ -141,8 +142,10 @@
                 <p>If you connect WebUntis or Moodle, your credentials are stored encrypted in your gradebook. The server connects on your behalf to your school's WebUntis or Moodle server to fetch class lists and timetables or to add events. Your school or its provider is responsible for the processing there.</p>
                 <h4>Smartphone app and pairing</h4>
                 <p>When you pair a smartphone, it creates a secret key that stays in the device's protected storage. The server only holds a hash of it and your data key encrypted with it. The app stays signed in for up to 6&nbsp;months.</p>
+                <h4>Confirmation of the DPA by school management</h4>
+                <p>If a head of school or a person authorised by them confirms the DPA via a link, we store their name, role, the school and the time of confirmation as well as the contract version. The email address the link was sent to is deleted after confirmation or once the link has expired. The school management enters name and role themselves (Art.&nbsp;13 GDPR); the email address comes from the teacher who named the school management (Art.&nbsp;14 GDPR). The legal basis for the email address until confirmation is our legitimate interest in the contract being concluded (Art.&nbsp;6(1)(f) GDPR). The purpose of the other data is to prove that the contract was concluded (Art.&nbsp;6(1)(c) in conjunction with Art.&nbsp;28 GDPR); it is kept for three years after the contract ends. The rights described in section 11 also apply to the school management.</p>
                 <h4>Recovery key</h4>
-                <p>When you register you receive a recovery key that lets you reset your password without losing data. On request we send it to you once as a PDF by email; we keep no readable copy afterwards. If you reset your password by email without the recovery key, your gradebook is deleted because it cannot be decrypted without the key.</p>
+                <p>When you register you receive a recovery key that lets you reset your password without losing data. On request we send it to you once as a PDF by email; we keep no readable copy afterwards. The email containing the recovery key then sits in your mailbox with your email provider. Anyone with access to your mailbox can use it to reset your password. Please store the recovery key yourself and delete the email. If you reset your password by email without the recovery key, your gradebook is deleted because it cannot be decrypted without the key.</p>
             </section>
         </section>
 
@@ -173,7 +176,7 @@
                     <li><strong>Your browser's local storage</strong>: settings such as language, colour scheme and compact view; they never leave your device</li>
                     <li><strong>Service worker</strong>: caches program files so EduGrade loads faster</li>
                 </ul>
-                <p>There are no tracking or advertising cookies, so no cookie banner is needed.</p>
+                <p>These storage operations are strictly necessary for the service and therefore permitted without consent (§ 165(3) TKG 2021). There are no tracking or advertising cookies, so no cookie banner is needed.</p>
             </section>
         </section>
 
@@ -188,8 +191,8 @@
                 <ul>
                     <li><strong>STRATO GmbH</strong>, Berlin, as hosting provider (processor, Germany)</li>
                     <li><strong>internet.at</strong> as domain registrar for edugrade.at (Austria)</li>
-                    <li><strong>Cloudflare, Inc.</strong> (USA) solely as DNS provider for edugrade.at, without proxy: your traffic does not pass through Cloudflare, only DNS queries (domain name, IP address of the querying DNS server) are processed. Basis for the third-country transfer: EU-US Data Privacy Framework or standard contractual clauses</li>
-                    <li>Neither has access to the content of your account</li>
+                    <li><strong>Cloudflare, Inc.</strong> (USA) solely as DNS provider for edugrade.at, without proxy: your traffic does not pass through Cloudflare, only DNS queries (domain name, IP address of the querying DNS server) are processed. The sole basis for the third-country transfer is the EU-US Data Privacy Framework (adequacy decision, Art.&nbsp;45 GDPR)</li>
+                    <li>The registrar and the DNS provider have no access to the content of your account</li>
                     <li>Other users only to the extent you control: students/parents with class shares, members of your organisation, recipients of a class handover</li>
                     <li>Authorities only if we are legally obliged &ndash; even then we cannot hand over gradebook data in readable form without an active session</li>
                 </ul>
@@ -205,9 +208,10 @@
             </header>
             <section class="pp space-y-3">
                 <ul>
-                    <li><strong>Account and gradebook:</strong> as long as your account exists; all data is deleted immediately when the account is deleted, including shares, class handovers, your organisation entries and open reset links</li>
+                    <li><strong>Account and gradebook:</strong> as long as your account exists; all data is deleted immediately when the account is deleted, including shares, class handovers, your organisation entries and open reset links. The data remains in backup copies until regular overwriting, at the latest 30&nbsp;days.</li>
+                    <li><strong>Proof of DPA signing</strong> (name, school, time, version): three years after the agreement ends</li>
                     <li><strong>Unconfirmed accounts:</strong> released and deleted after 24&nbsp;hours if the email address is registered again</li>
-                    <li><strong>Inactive accounts:</strong> may be deleted after 12&nbsp;months of inactivity with prior notice</li>
+                    <li><strong>Inactive accounts:</strong> are deleted after 12&nbsp;months of inactivity. We announce this three times by email beforehand.</li>
                     <li><strong>Sessions:</strong> until expiry (1&nbsp;hour, or 6&nbsp;months in the app) or sign-out</li>
                     <li><strong>Class shares:</strong> until expiry or revocation, then deleted within one day</li>
                     <li><strong>Class handovers:</strong> until accepted or declined, at most 7&nbsp;days; the copy is deleted on acceptance, decline or expiry</li>
