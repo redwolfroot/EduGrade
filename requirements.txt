@@ -1,7 +1,7 @@
 quart==0.20.0
 werkzeug==3.1.8
 python-dotenv==1.2.2
-cryptography==48.0.1
+cryptography==50.0.1
 qrcode==8.2
 Pillow==12.2.0
 reportlab==4.5.1
